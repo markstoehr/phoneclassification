@@ -652,6 +652,120 @@ them.
 
 \subsection{Mixture Model training}
 
+\section{Latent Shift EM for Detection performance}
+Another experiment we are running is to compare detection results where we double the length of the examples used for detection.
+To dod this we construct another config file with a longer time
+\texttt{conf/main\_longer.config}
+which we get via
+\begin{verbatim}
+cat << "EOF" > $conf/main.config
+[SPECTROGRAM]
+sample_rate=16000
+num_window_samples=320
+num_window_step_samples=80
+fft_length=512
+kernel_length=7
+freq_cutoff=3000
+preemphasis=.95
+use_mel=False
+do_mfccs=False
+no_use_dpss=False
+mel_nbands=40
+num_ceps=13
+liftering=.6
+include_energy=False
+include_deltas=False
+include_double_deltas=False
+delta_window=9
+do_freq_smoothing=False
+mel_smoothing_kernel=-1
+
+[SVM]
+example_length=.5
+kernel='linear'
+penalty_list=['unreg', '1.0',
+                                                 'little_reg','0.1',
+                                                 'reg', '0.05',
+                                                 'reg_plus', '0.01',
+                                                 'reg_plus_plus','0.001']
+
+
+[EDGES]
+block_length=40
+spread_length=1
+threshold=.7
+magnitude_block_length=0
+abst_threshold=(0.025,  0.025,  0.015,  0.015,  0.02 ,  0.02 ,  0.02 ,  0.02 )
+magnitude_threshold=.4
+magnitude_spread=1
+magnitude_and_edge_features=False
+magnitude_features=False
+mag_smooth_freq=0
+mag_downsample_freq=0
+auxiliary_data=False
+auxiliary_threshold=.5
+num_mag_channels=10
+num_axiliary_data=3
+save_parts_S=False
+EOF
+
+\end{verbatim}
+so that the features used are half a second in length. The experiment
+to be performed is comparing p versus b so we re extract the
+data
+\begin{verbatim}
+local=local
+conf=conf
+data=data/local/data
+for phn in b p  ; do
+    echo ${phn}
+    for data_set in train dev core_test ; do
+        echo ${data_set}
+
+        $local/sampletrans2frametrans.py -c $conf/main_longer.config\
+            --transcript ${data}/${phn}_${data_set}.trans\
+            > ${data}/${phn}_${data_set}_longer.frame_trans
+
+        $local/extract_data_matrix.py -c $conf/main_longer.config --transcript ${data}/${phn}_${data_set}_longer.frame_trans\
+            --uttids ${data}/${data_set}.uttids\
+            --output ${data}/${phn}_${data_set}_longer_examples.npy\
+            --output_spec ${data}/${phn}_${data_set}_longer_examples_S.npy\
+            --output_info ${data}/${phn}_${data_set}_longer_info.npy
+    done
+done
+
+\end{verbatim}
+and then we train the SVMs to compare these
+\begin{verbatim}
+export PATH=$PATH:/home/mark/Template-Speech-Recognition/Development/051913
+phn1=b
+phn2=p
+data=data/local/data
+datadir=$data
+exp_dir=exp/longer_classify
+mkdir -p $exp_dir
+conf=conf
+CSVMTrain.py --input_data_matrices\
+            $datadir/${phn1}_train_longer_examples.npy\
+            $datadir/${phn2}_train_longer_examples.npy\
+            --input_test_data_matrices\
+            $datadir/${phn1}_dev_longer_examples.npy\
+            $datadir/${phn2}_dev_longer_examples.npy\
+            --input_lengths\
+            $datadir/${phn1}_train.lengths\
+            $datadir/${phn2}_train.lengths\
+            --input_test_lengths\
+            $datadir/${phn1}_dev.lengths\
+            $datadir/${phn2}_dev.lengths\
+            --output_fls_prefix $exp_dir/svm_train_longer_${phn1}_${phn2}\
+            --config $conf/main_longer.config -v
+\end{verbatim}
+one question that we wish to address is how much difference the longer
+or shorter windows really makes on classification performance.
+We use 97 time points for this experiment.
+We have a local script for comparing the sizes of the various
+coefficient filters
+
 
 \section{Collecting terms and training}
 
