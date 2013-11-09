@@ -649,6 +649,61 @@ the bash portion of this is a little tricky -- we get bash to
 make the phone list into the input arguments and shift through
 them.
 
+\begin{verbatim}
+datadir=data/local/data
+exp_dir=exp/all_phones_exp
+commands_fl=$exp_dir/commands_fl
+rm -f $commands_fl
+set -- `cat $datadir/phone.list`
+for phn1 ; do
+    shift
+    for phn2 ; do
+        echo "$phn1 against $phn2"
+        echo CSVMTrain.py --input_data_matrices\
+            $datadir/${phn1}_train_examples.npy\
+            $datadir/${phn2}_train_examples.npy\
+            --input_test_data_matrices\
+            $datadir/${phn1}_dev_examples.npy\
+            $datadir/${phn2}_dev_examples.npy\
+            --input_lengths\
+            $datadir/${phn1}_train.lengths\
+            $datadir/${phn2}_train.lengths\
+            --input_test_lengths\
+            $datadir/${phn1}_dev.lengths\
+            $datadir/${phn2}_dev.lengths\
+            --output_fls_prefix $exp_dir/svm_train_${phn1}_${phn2}\
+            --config $conf/main.config -v >> $commands_fl
+    done
+done
+\end{verbatim}
+which will save all of the commands to
+\texttt{commands_fl}
+and then we add parallel to the commands
+\begin{verbatim}
+parallel=~/bin/parallel
+\end{verbatim}
+and then we can write the commands
+\begin{verbatim}
+$parallel --semaphore --jobs 6  --joblog $exp_dir/parallel.log -a $commands_fl
+\end{verbatim}
+and we also need to check how many have been completed at a given
+time just in case the jobs get interrupted
+we do this with
+\begin{verbatim}
+last_commands_fl=$exp_dir/last_commands_fl
+local/check_completed.py < $commands_fl > $last_commands_fl
+\end{verbatim}
+and then we run it with
+\begin{verbatim}
+$parallel --semaphore --jobs 6  --joblog $exp_dir/parallel.log -a $last_commands_fl
+\end{verbatim}
+\begin{verbatim}
+cat $last_commands_fl | while read line; do
+sem --jobs 6 $line
+done
+
+\end{verbatim}
+We construct a file with all of those commands listed in it 
 
 \subsection{Mixture Model training}
 
