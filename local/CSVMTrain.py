@@ -6,23 +6,37 @@ import argparse, itertools
 import matplotlib.pyplot as plt
 from sklearn import svm
 from template_speech_rec import configParserWrapper
+from scipy.spatial.distance import pdist, squareform, cdist
 
 def main(args):
     """
     """
     config_d = configParserWrapper.load_settings(open(args.config,'r'))
-    
-    X = []
+
+
     y = []
     for fpath_id,fpath in enumerate(args.input_data_matrices):
-        X0 = np.load(fpath).astype(np.float)
+        X0 = np.load(fpath)
         X0_shape = X0.shape[1:]
-        X.extend(X0.reshape(len(X0),
-                            np.prod(X0_shape)))
         y.extend(fpath_id * np.ones(len(X0)))
 
-    X = np.array(X)
     y = np.array(y)
+
+    # add in two coordinates for the length
+    if args.input_lengths is not None:
+        X = np.zeros((len(y),np.prod(X0_shape)+2),dtype=float)
+    else:
+        X = np.zeros((len(y),np.prod(X0_shape)),dtype=float)
+    cur_idx = 0
+    for fpath_id,fpath in enumerate(args.input_data_matrices):
+        X0 = np.load(fpath)
+
+        X[cur_idx:cur_idx+len(X0),:np.prod(X0_shape)] = X0.reshape(len(X0),
+                                                np.prod(X0_shape))
+        cur_idx += len(X0)
+
+
+
 
 
     if args.input_lengths is not None:
@@ -34,7 +48,11 @@ def main(args):
         train_ls = np.log(np.tile(np.array(train_ls),
                            (2,1)).T)
         train_ls[:,1] *= train_ls[:,1]
-        X = np.hstack((X,train_ls))
+        X[:,-2:] = train_ls
+
+
+
+
 
     X_test = []
     y_test = []
@@ -53,7 +71,7 @@ def main(args):
         for fpath in args.input_test_lengths:
             ls = np.loadtxt(fpath,dtype=int)
             test_ls.extend(ls[:,2])
-            
+
         test_ls = np.log(np.tile(np.array(test_ls),
                            (2,1)).T)
         test_ls[:,1] *= test_ls[:,1]
@@ -61,44 +79,54 @@ def main(args):
         X_test = np.hstack((X_test,test_ls))
 
 
+    if args.use_weights is not None:
+        weights = np.load(args.use_weights)
+        weights = weights.reshape(weights.size)
+        X *= weights
+        X_test *= weights
+        if args.do_kernel_dist_features:
+            
+            X_test = np.exp(-cdist(X_test,X, 'euclidean'))
+            X = np.exp(-squareform(pdist(X, 'euclidean')))
 
 
     penalty_names = config_d['SVM']['penalty_list'][::2]
     penalty_values = tuple( float(k) for k in config_d['SVM']['penalty_list'][1::2])
-    
+
     dev_results = ()
     exp_descriptions = ()
     exp_description_id = 0
-    if config_d['SVM']['kernel'] == 'linear':
-        for penalty_name, penalty_value in itertools.izip(penalty_names,penalty_values):
-            if args.v:
-                print '%s %s' % ('linear', penalty_name)
-            clf = svm.SVC(kernel='linear', C=penalty_value,verbose=args.v)
+
+    for penalty_name, penalty_value in itertools.izip(penalty_names,penalty_values):
+        if args.v:
+            print '%s %s' % ('linear', penalty_name)
+
+        if config_d['SVM']['kernel'] == 'linear':
+            clf = svm.LinearSVC(C=penalty_value,
+                                loss='l1')
             clf.fit(X,y)
-            np.save('%s_linear_%s_support.npy' % (args.output_fls_prefix,
+        elif config_d['SVM']['kernel'] == 'polynomial':
+
+            import pdb; pdb.set_trace()
+
+        np.save('%s_%s_%s_coef.npy' % (args.output_fls_prefix,config_d['SVM']['kernel'],
                                            penalty_name),
-                    clf.support_)
-            np.save('%s_linear_%s_dual_coef.npy' % (args.output_fls_prefix,
-                                           penalty_name),
-                    clf.dual_coef_)
-            np.save('%s_linear_%s_coef.npy' % (args.output_fls_prefix,
-                                           penalty_name),
-                    clf.coef_)
-            np.save('%s_linear_%s_intercept.npy' % (args.output_fls_prefix,
+                    clf.coef_[0])
+        np.save('%s_%s_%s_intercept.npy' % (args.output_fls_prefix,config_d['SVM']['kernel'],
                                            penalty_name),
                     clf.intercept_)
 
-            y_test_hat = clf.predict(X_test)
-            exp_descriptions += (('linear',penalty_name),)
+        y_test_hat = clf.predict(X_test)
+        exp_descriptions += ((config_d['SVM']['kernel'],penalty_name),)
 
-            dev_results += ( (exp_description_id,
-                              np.abs(y_test_hat-y_test).sum()/len(y_test), # error rate
-                              np.abs(y_test_hat[y_test==0]-y_test[y_test==0]).sum()/len(y_test[y_test==0]), # mistakes by class 0
-                              np.abs(y_test_hat[y_test==1]-y_test[y_test==1]).sum()/len(y_test[y_test==1]) # mistakes by class 1
+        dev_results += ( (exp_description_id,
+                          np.abs(y_test_hat-y_test).sum()/len(y_test), # error rate
+                          np.abs(y_test_hat[y_test==0]-y_test[y_test==0]).sum()/len(y_test[y_test==0]), # mistakes by class 0
+                          np.abs(y_test_hat[y_test==1]-y_test[y_test==1]).sum()/len(y_test[y_test==1]) # mistakes by class 1
                           ),)
-            if args.v:
-                print '\t'.join(tuple( str(k) for k in dev_results[-1]))
-            exp_description_id +=1
+        if args.v:
+            print '\t'.join(tuple( str(k) for k in dev_results[-1]))
+        exp_description_id +=1
 
     open('%s_exp_descriptions' % args.output_fls_prefix,
          'w').write('\n'.join(tuple(
@@ -107,10 +135,10 @@ def main(args):
              for k,d in enumerate(exp_descriptions))))
     np.save('%s_dev_results.npy' % args.output_fls_prefix,
             np.array(dev_results))
-            
 
-    
-        
+
+
+
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser("""
@@ -147,6 +175,13 @@ if __name__=="__main__":
                         type=str,
                         default='conf/train.config',
                         help='train config that will be read and written to')
+    parser.add_argument('--use_weights',
+                        type=str,
+                        default=None,
+                        help='weights for the feature vector')
+    parser.add_argument('--do_kernel_dist_features',
+                        action='store_true',
+                        help='whether to use the Gaussian kernel to get the SVM features, generally for use with with a weight vector')
     parser.add_argument('-v',
                         action='store_true',
                         help='verbosity flag')
