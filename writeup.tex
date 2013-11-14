@@ -649,6 +649,118 @@ the bash portion of this is a little tricky -- we get bash to
 make the phone list into the input arguments and shift through
 them.
 
+\begin{verbatim}
+datadir=data/local/data
+exp_dir=exp/all_phones_exp
+commands_fl=$exp_dir/commands_fl
+rm -f $commands_fl
+set -- `cat $datadir/phone.list`
+for phn1 ; do
+    shift
+    for phn2 ; do
+        echo "$phn1 against $phn2"
+        echo CSVMTrain.py --input_data_matrices\
+            $datadir/${phn1}_train_examples.npy\
+            $datadir/${phn2}_train_examples.npy\
+            --input_test_data_matrices\
+            $datadir/${phn1}_dev_examples.npy\
+            $datadir/${phn2}_dev_examples.npy\
+            --input_lengths\
+            $datadir/${phn1}_train.lengths\
+            $datadir/${phn2}_train.lengths\
+            --input_test_lengths\
+            $datadir/${phn1}_dev.lengths\
+            $datadir/${phn2}_dev.lengths\
+            --output_fls_prefix $exp_dir/svm_train_${phn1}_${phn2}\
+            --config $conf/main.config -v >> $commands_fl
+    done
+done
+\end{verbatim}
+which will save all of the commands to
+\texttt{commands_fl}
+and then we add parallel to the commands
+\begin{verbatim}
+parallel=~/bin/parallel
+\end{verbatim}
+and then we can write the commands
+\begin{verbatim}
+$parallel --semaphore --jobs 6  --joblog $exp_dir/parallel.log -a $commands_fl
+\end{verbatim}
+and we also need to check how many have been completed at a given
+time just in case the jobs get interrupted
+we do this with
+\begin{verbatim}
+last_commands_fl=$exp_dir/last_commands_fl
+local/check_completed.py < $commands_fl > $last_commands_fl
+\end{verbatim}
+and then we run it with
+\begin{verbatim}
+$parallel --semaphore --jobs 6  --joblog $exp_dir/parallel.log -a $last_commands_fl
+\end{verbatim}
+\begin{verbatim}
+cat $last_commands_fl | while read line; do
+sem --jobs 6 $line
+done
+
+\end{verbatim}
+We construct a file with all of those commands listed in it 
+
+\subsubsection{Scoring}
+
+
+\begin{verbatim}
+datadir=data/local/data
+exp_dir=exp/all_phones_exp
+phn_pairs=''
+coef_fls=''
+intercept_fls=''
+penalty=reg_plus_plus
+set -- `cat $datadir/phone.list`
+for phn1 ; do
+    shift
+    for phn2 ; do
+        phn_pairs="$phn_pairs $phn1 $phn2"
+	coef_fls="$coef_fls $exp_dir/svm_train_${phn1}_${phn2}_linear_${penalty}_coef.npy"
+        intercept_fls="$intercept_fls $exp_dir/svm_train_${phn1}_${phn2}_linear_${penalty}_intercept.npy"
+    done
+done
+\end{verbatim}
+and then we get
+\begin{verbatim}
+penalties="little_reg reg_plus reg_plus_plus reg_plus_plus_plus"
+for penalty in $penalties; do
+python local/CCollectSVMs.py --coefs $coef_fls --intercepts $intercept_fls --out_coefs $exp_dir/svm_train_all_pairs_linear_${penalty}_coefs.npy --out_intercepts $exp_dir/svm_train_all_pairs_linear_${penalty}_intercepts.npy --label_pairs $phn_pairs --out_ids $exp_dir/svm_train_all_pairs_${penalty}.ids --phns_to_ids $exp_dir/svm_train_all_pairs_${penalty}_phns.ids
+done
+
+\end{verbatim}
+and then we are ready to test these on a given test set and get the scoring.
+\begin{verbatim}
+dev_examples=""
+dev_lengths=""
+phn_ids=""
+phn_id=0
+for phn in `cat $datadir/phone.list` ; do
+  dev_examples="$dev_examples data/local/data/${phn}_dev_examples.npy"
+  dev_lengths="$dev_lengths data/local/data/${phn}_dev.lengths"
+  phn_ids="$phn_ids $phn_id"
+  phn_id=$(( $phn_id + 1 ))
+done
+
+for penalty in $penalties ; do
+python local/CRunSVM.py \
+  --coefs $exp_dir/svm_train_all_pairs_linear_${penalty}_coefs.npy\
+  --intercepts $exp_dir/svm_train_all_pairs_linear_${penalty}_intercepts.npy\
+  --out_ids $exp_dir/svm_train_all_pairs_${penalty}.ids\
+  --input_data_matrices $dev_examples\
+  --input_lengths $dev_lengths\
+  --out_confusion_matrix $exp_dir/svm_all_pairs_${penalty}_confusion.npy\
+  --out_leehon_confusion_matrix $exp_dir/svm_all_pairs_${penalty}_leehon_confusion.npy\
+  --input_ids $phn_ids\
+  --leehon_mapping conf/phones.48-39\
+  --phn_ids $exp_dir/svm_train_all_pairs_${penalty}_phns.ids
+done
+
+\end{verbatim}
 
 \subsection{Mixture Model training}
 
