@@ -764,6 +764,60 @@ done
 
 \subsection{Mixture Model training}
 
+We then have commands setup to write
+\begin{verbatim}
+mkdir -p exp/bernoulli_all_phones
+exp_dir=exp/bernoulli_all_phones
+data=data/local/data
+for phn in `cat ${data}/phone.list` ; do
+   echo phn=${phn}
+   python local/CBernoulliMMTrain.py --config conf/main.config \
+      --input_data_matrix ${data}/${phn}_train_examples.npy \
+      --templates ${exp_dir}/${phn}_templates.npy \
+      --weights ${exp_dir}/${phn}_weights.npy \
+      --underlying_data ${data}/${phn}_train_examples_S.npy \
+      --spec_templates ${exp_dir}/${phn}_S_templates.npy \
+      --viz_spec_templates ${exp_dir}/${phn}_S_templates -v
+done
+
+for phn in `cat ${data}/phone.list` ; do
+   echo phn=${phn}
+   python local/check_components_nondegenerate.py --config conf/main.config \
+      --input_data_matrix ${data}/${phn}_train_examples.npy \
+      --templates ${exp_dir}/${phn}_templates.npy \
+      --weights ${exp_dir}/${phn}_weights.npy \
+      --underlying_data ${data}/${phn}_train_examples_S.npy \
+      --spec_templates ${exp_dir}/${phn}_S_templates.npy \
+      --viz_spec_templates ${exp_dir}/${phn}_S_templates -v
+done
+
+
+
+
+\end{verbatim}
+
+and then we collect together the various models so that way
+we can score
+
+\begin{verbatim}
+data=data/local/data
+exp_dir=exp/bernoulli_all_phones
+dev_examples=""
+templates=""
+for phn in `cat ${data}/phone.list` ; do
+  dev_examples="$dev_examples ${data}/${phn}_dev_examples.npy"
+  templates="$templates ${exp_dir}/${phn}_templates.npy"
+done
+
+python local/CTestBernoulli.py --data $dev_examples --templates $templates\
+    --out_scores ${exp_dir}/bernoulli_scores.npy\
+    --out_labels ${exp_dir}/bernoulli_labels.npy\
+    --out_top_predicted_labels ${exp_dir}/bernoulli_top_predicted_labels.npy
+
+
+\end{verbatim}
+
+
 \section{Latent Shift EM for Detection performance}
 Another experiment we are running is to compare detection results where we double the length of the examples used for detection.
 To dod this we construct another config file with a longer time
