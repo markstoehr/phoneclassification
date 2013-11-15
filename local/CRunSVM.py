@@ -115,4 +115,8 @@ if __name__ == "__main__":
     parser.add_argument('--phn_ids',
                         type=str,
                         help='path to the file containing the identities for each of the phones')
+    parser.add_argument('--top_predicted_labels',
+                        type=str,
+                        default=None,
+                        help='if included makes it so that the voting is only held between a small number of the components')
     main(parser.parse_args())
