@@ -891,6 +891,7 @@ we train an SVM for each component.  We will then pick the component that
 achieved the largest likelihood and is classified as yes.
 The code for running the SVMs is here
 \begin{verbatim}
+data=data/local/data
 exp_dir=exp/all_phones_exp
 exp_dir_bernoulli=exp/bernoulli_all_phones
 dev_examples=""
@@ -919,44 +920,45 @@ python local/CTrainComponentSVMs.py --data $train_examples \
    -v\
     --config conf/main.config\
     --label 0\
-    --component_id 0
+    --component_id 0\
+    --out_svm_prefix ${exp_dir_bernoulli}/svm_bernoulli_train_0l_0c_
 
 
-python local/CTrainComponentSVMs.py --data $train_examples \
-    --lengths $train_lengths\
-    --out_labels ${exp_dir_bernoulli}/bernoulli_train_labels.npy\
-    --out_components ${exp_dir_bernoulli}/bernoulli_train_components.npy\
-    --out_top_predicted_labels ${exp_dir_bernoulli}/bernoulli_train_top_predicted_labels.npy\
-    --out_top_predicted_components ${exp_dir_bernoulli}/bernoulli_train_top_predicted_components.npy\
-
-
-
-python local/CTestBernoulli.py --data $dev_examples --templates $templates\
-    --out_scores ${exp_dir}/bernoulli_dev_scores.npy\
-    --out_labels ${exp_dir}/bernoulli_dev_labels.npy\
-    --out_components ${exp_dir}/bernoulli_dev_components.npy\
-    --out_top_predicted_labels ${exp_dir}/bernoulli_dev_top_predicted_labels.npy\
-    --out_top_predicted_components ${exp_dir}/bernoulli_dev_top_predicted_components.npy
-
-
-#for penalty in $penalties ; do
-penalty=reg_plus_plus
-python local/CRunSVMTopVotes.py \
-  --coefs $exp_dir/svm_train_all_pairs_linear_${penalty}_coefs.npy\
-  --intercepts $exp_dir/svm_train_all_pairs_linear_${penalty}_intercepts.npy\
-  --out_ids $exp_dir/svm_train_all_pairs_${penalty}.ids\
-  --input_data_matrices $dev_examples\
-  --input_lengths $dev_lengths\
-  --out_confusion_matrix $exp_dir_bernoulli/svm_all_pairs_top_bernouli_votes_${penalty}_confusion.npy\
-  --out_leehon_confusion_matrix $exp_dir_bernoulli/svm_all_pairs_top_bernouli_votes_${penalty}_leehon_confusion.npy\
-  --input_ids $phn_ids\
-  --leehon_mapping conf/phones.48-39\
-  --phn_ids $exp_dir/svm_train_all_pairs_${penalty}_phns.ids\
-  --top_predicted_labels $exp_dir_bernoulli/bernoulli_dev_top_predicted_labels.npy
 
 \end{verbatim}
+and having established that works we can then run a multicore version
+training all of them at once. We do this by first generating a list
+of all the labels and components
+\begin{verbatim}
+commands_fl=${exp_dir_bernoulli}/commands_fl
+rm -f $commands_fl
+touch $commands_fl
+python local/CGetAllLabels.py --labels ${exp_dir_bernoulli}/bernoulli_train_labels.npy | while read label ; do
+    python local/CGetAllComponents.py --labels ${exp_dir_bernoulli}/bernoulli_train_labels.npy --components ${exp_dir_bernoulli}/bernoulli_train_components.npy --label $label | while read component ; do
+        echo python local/CTrainComponentSVMs.py --data $train_examples \
+    --labels ${exp_dir_bernoulli}/bernoulli_train_labels.npy\
+    --components ${exp_dir_bernoulli}/bernoulli_train_components.npy\
+    --predicted_labels ${exp_dir_bernoulli}/bernoulli_train_top_predicted_labels.npy\
+    --predicted_components ${exp_dir_bernoulli}/bernoulli_train_top_predicted_components.npy\
+   -v\
+    --config conf/main.config\
+    --label $label\
+    --component_id $component\
+    --out_svm_prefix ${exp_dir_bernoulli}/svm_bernoulli_train_${label}l_${component}c_ >> $commands_fl
+    done
+done
 
+cat $commands_fl | while read line; do
+sem --jobs 6 $line
+done
+\end{verbatim}
+and then we have the set of SVMs that we are going to use
+to perform testing with.  The first thing to check now is the testing
+loss given that we have the new classifier on hand.
 
+\begin{verbatim}
+
+\end{verbatim}
 
   In particular, we note that the true label
 is often among the top five predictions.  So we are going to
