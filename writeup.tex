@@ -803,19 +803,166 @@ we can score
 data=data/local/data
 exp_dir=exp/bernoulli_all_phones
 dev_examples=""
+train_examples=""
 templates=""
 for phn in `cat ${data}/phone.list` ; do
   dev_examples="$dev_examples ${data}/${phn}_dev_examples.npy"
+  train_examples="$train_examples ${data}/${phn}_train_examples.npy"
   templates="$templates ${exp_dir}/${phn}_templates.npy"
 done
 
 python local/CTestBernoulli.py --data $dev_examples --templates $templates\
-    --out_scores ${exp_dir}/bernoulli_scores.npy\
-    --out_labels ${exp_dir}/bernoulli_labels.npy\
-    --out_top_predicted_labels ${exp_dir}/bernoulli_top_predicted_labels.npy
+    --out_scores ${exp_dir}/bernoulli_dev_scores.npy\
+    --out_labels ${exp_dir}/bernoulli_dev_labels.npy\
+    --out_components ${exp_dir}/bernoulli_dev_components.npy\
+    --out_top_predicted_labels ${exp_dir}/bernoulli_dev_top_predicted_labels.npy\
+    --out_top_predicted_components ${exp_dir}/bernoulli_dev_top_predicted_components.npy
+
+python local/CTestBernoulli.py --data $train_examples --templates $templates\
+    --out_scores ${exp_dir}/bernoulli_train_scores.npy\
+    --out_labels ${exp_dir}/bernoulli_train_labels.npy\
+    --out_components ${exp_dir}/bernoulli_train_components.npy\
+    --out_top_predicted_labels ${exp_dir}/bernoulli_train_top_predicted_labels.npy\
+    --out_top_predicted_components ${exp_dir}/bernoulli_train_top_predicted_components.npy
 
 
 \end{verbatim}
+these two give us a sense of the performance on the training and
+testing data of the two models.  The results show that we get
+a 58\% accuracy using the edges on the training data and a
+54\% accuracy using the edges on the testing data. This indicates
+that the two data sets are actually very similar.
+
+\subsection{Combining the SVM with Bernoulli mixtures}
+However, one statistic that we take note of is that most
+of the true labels appear in the top few predicted labels. 
+Hence it might make sense to run the SVM voting code but only
+over the top predicted labels and see what the results are.
+
+We run the following code to test that idea
+\begin{verbatim}
+exp_dir=exp/all_phones_exp
+exp_dir_bernoulli=exp/bernoulli_all_phones
+dev_examples=""
+dev_lengths=""
+phn_ids=""
+phn_id=0
+for phn in `cat $data/phone.list` ; do
+  dev_examples="$dev_examples data/local/data/${phn}_dev_examples.npy"
+  dev_lengths="$dev_lengths data/local/data/${phn}_dev.lengths"
+  phn_ids="$phn_ids $phn_id"
+  phn_id=$(( $phn_id + 1 ))
+done
+
+#for penalty in $penalties ; do
+penalty=reg_plus_plus
+python local/CRunSVMTopVotes.py \
+  --coefs $exp_dir/svm_train_all_pairs_linear_${penalty}_coefs.npy\
+  --intercepts $exp_dir/svm_train_all_pairs_linear_${penalty}_intercepts.npy\
+  --out_ids $exp_dir/svm_train_all_pairs_${penalty}.ids\
+  --input_data_matrices $dev_examples\
+  --input_lengths $dev_lengths\
+  --out_confusion_matrix $exp_dir_bernoulli/svm_all_pairs_top_bernouli_votes_${penalty}_confusion.npy\
+  --out_leehon_confusion_matrix $exp_dir_bernoulli/svm_all_pairs_top_bernouli_votes_${penalty}_leehon_confusion.npy\
+  --input_ids $phn_ids\
+  --leehon_mapping conf/phones.48-39\
+  --phn_ids $exp_dir/svm_train_all_pairs_${penalty}_phns.ids\
+  --top_predicted_labels $exp_dir_bernoulli/bernoulli_dev_top_predicted_labels.npy
+
+#done
+
+\end{verbatim}
+and this proposed ``fix'' only gets us 70\%
+accuracy which is a step in the wrong direction from the SVM, although it is an improvement over the Bernoulli model.
+Instead we are going to use the Bernoulli mixture modeling in order
+to cluster the instances and figure out where the mistakes are being
+made.
+
+This gets into a hierarchical learning method where we train
+true detections for a cluster against its mistakes.  In this
+setup we associate each data point with its predicted class
+and the predicted label.  We run a command which goes through
+every class, and every components, finds the hits, mistakes, and
+misses, and then we construct from that a training set which
+may then be used to train an SVM. 
+
+The first attempt is to do a one-vs-rest strategy, in which case
+we train an SVM for each component.  We will then pick the component that
+achieved the largest likelihood and is classified as yes.
+The code for running the SVMs is here
+\begin{verbatim}
+exp_dir=exp/all_phones_exp
+exp_dir_bernoulli=exp/bernoulli_all_phones
+dev_examples=""
+train_examples=""
+train_lengths=""
+dev_lengths=""
+phn_ids=""
+phn_id=0
+phns=`cat $data/phone.list`
+for phn in `cat $data/phone.list` ; do
+  dev_examples="$dev_examples data/local/data/${phn}_dev_examples.npy"
+  dev_lengths="$dev_lengths data/local/data/${phn}_dev.lengths"
+  train_examples="$train_examples data/local/data/${phn}_train_examples.npy"
+  train_lengths="$train_lengths data/local/data/${phn}_train.lengths"
+  phn_ids="$phn_ids $phn_id"
+  phn_id=$(( $phn_id + 1 ))
+done
+
+
+
+python local/CTrainComponentSVMs.py --data $train_examples \
+    --labels ${exp_dir_bernoulli}/bernoulli_train_labels.npy\
+    --components ${exp_dir_bernoulli}/bernoulli_train_components.npy\
+    --predicted_labels ${exp_dir_bernoulli}/bernoulli_train_top_predicted_labels.npy\
+    --predicted_components ${exp_dir_bernoulli}/bernoulli_train_top_predicted_components.npy\
+   -v\
+    --config conf/main.config\
+    --label 0\
+    --component_id 0
+
+
+python local/CTrainComponentSVMs.py --data $train_examples \
+    --lengths $train_lengths\
+    --out_labels ${exp_dir_bernoulli}/bernoulli_train_labels.npy\
+    --out_components ${exp_dir_bernoulli}/bernoulli_train_components.npy\
+    --out_top_predicted_labels ${exp_dir_bernoulli}/bernoulli_train_top_predicted_labels.npy\
+    --out_top_predicted_components ${exp_dir_bernoulli}/bernoulli_train_top_predicted_components.npy\
+
+
+
+python local/CTestBernoulli.py --data $dev_examples --templates $templates\
+    --out_scores ${exp_dir}/bernoulli_dev_scores.npy\
+    --out_labels ${exp_dir}/bernoulli_dev_labels.npy\
+    --out_components ${exp_dir}/bernoulli_dev_components.npy\
+    --out_top_predicted_labels ${exp_dir}/bernoulli_dev_top_predicted_labels.npy\
+    --out_top_predicted_components ${exp_dir}/bernoulli_dev_top_predicted_components.npy
+
+
+#for penalty in $penalties ; do
+penalty=reg_plus_plus
+python local/CRunSVMTopVotes.py \
+  --coefs $exp_dir/svm_train_all_pairs_linear_${penalty}_coefs.npy\
+  --intercepts $exp_dir/svm_train_all_pairs_linear_${penalty}_intercepts.npy\
+  --out_ids $exp_dir/svm_train_all_pairs_${penalty}.ids\
+  --input_data_matrices $dev_examples\
+  --input_lengths $dev_lengths\
+  --out_confusion_matrix $exp_dir_bernoulli/svm_all_pairs_top_bernouli_votes_${penalty}_confusion.npy\
+  --out_leehon_confusion_matrix $exp_dir_bernoulli/svm_all_pairs_top_bernouli_votes_${penalty}_leehon_confusion.npy\
+  --input_ids $phn_ids\
+  --leehon_mapping conf/phones.48-39\
+  --phn_ids $exp_dir/svm_train_all_pairs_${penalty}_phns.ids\
+  --top_predicted_labels $exp_dir_bernoulli/bernoulli_dev_top_predicted_labels.npy
+
+\end{verbatim}
+
+
+
+  In particular, we note that the true label
+is often among the top five predictions.  So we are going to
+rerun the SVM but we only hold the voting among the top five
+predicted classes using the Bernoulli mixture model.
+
 
 
 \section{Latent Shift EM for Detection performance}
