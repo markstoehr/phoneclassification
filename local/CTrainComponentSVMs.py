@@ -11,7 +11,7 @@ def get_false_predicted_label_ranks(
                         predicted_components):
     """
     The true_predicted_label_ranks, predicted_labels, predicted_components
-    are assumed to only contain those entries which correspond to 
+    are assumed to only contain those entries which correspond to
     the labels being a certain phone with idea phn_id != label
     """
     false_label_ranks = np.argmax(
@@ -20,7 +20,7 @@ def get_false_predicted_label_ranks(
         (predicted_labels == label) * (predicted_components == component),1).astype(int)
     false_label_ranks[-has_false_label] = 1+false_label_ranks.max()
     return false_label_ranks
-    
+
 
 def main(args):
     """
@@ -52,10 +52,10 @@ def main(args):
         X = np.load(fl)
         X_shape = X.shape[1:]
         X = X.reshape(X.shape[0],np.prod(X_shape))
-        
+
         cur_labels = labels[labels==phn_id]
         cur_components = components[labels==phn_id]
-        
+
 
         if phn_id == args.label:
             true_examples.extend(X[(cur_components == args.component_id) * true_in_top_predictions[labels==phn_id]])
@@ -69,8 +69,18 @@ def main(args):
                     predicted_components[labels==phn_id])
             false_examples.extend(X[false_predicted_label_rank > true_predicted_label_ranks[labels==phn_id]])
 
+
+    if min(len(true_examples),len(false_examples)) < 20:
+        print "len(true_examples)=%d,len(false_examples)=%d" % (len(true_examples),len(false_examples))
+        print "So no svm trained for label %d component %d" % (args.label,args.component_id)
+        return
+
     y = np.array(len(true_examples) * [0] + len(false_examples)*[1])
     X = np.array(true_examples + false_examples)
+    del true_examples
+    del false_examples
+
+
 
     config_d = configParserWrapper.load_settings(open(args.config,'r'))
 
@@ -86,7 +96,7 @@ def main(args):
                                 loss='l1')
             clf.fit(X,y)
         else:
-
+            import pdb; pdb.set_trace()
 
 
 
@@ -99,7 +109,7 @@ def main(args):
                     clf.intercept_)
 
 
-    
+
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser("""For each component and model
@@ -146,4 +156,4 @@ if __name__=="__main__":
                         type=str,
                         help='prefix to the file path where the svm coefficient and intercepts are going to be saved--they will also be indexed by label id and component id')
     main(parser.parse_args())
-    
+
