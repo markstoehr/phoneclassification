@@ -101,6 +101,9 @@ def main(args):
 
 
         coef = clf.coef_.reshape(clf.coef_.size)
+        y_hat = np.dot(X,coef) + clf.intercept_[0]
+
+        print np.sum((y_hat>0).astype(int) == y.astype(int))/len(y)
         np.save('%s_%s_%s_coef.npy' % (args.out_svm_prefix,config_d['SVM']['kernel'],
                                            penalty_name),
                     coef)
@@ -134,6 +137,10 @@ if __name__=="__main__":
                         type=str,
                         nargs='+',
                         help='paths to where the data are kept, in order of phone ids')
+    parser.add_argument('--templates',
+                        type=str,
+                        nargs='+',
+                        help='list of templates to use for classification')
     # parser.add_argument('--lengths',
     #                     type=str,
     #                     nargs='+',
