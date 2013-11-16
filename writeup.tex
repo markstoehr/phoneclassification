@@ -933,6 +933,11 @@ of all the labels and components
 commands_fl=${exp_dir_bernoulli}/commands_fl
 rm -f $commands_fl
 touch $commands_fl
+svm_labels_fl=${exp_dir_bernoulli}/svm_labels_fl
+svm_component_ids_fl=${exp_dir_bernoulli}/svm_component_ids_fl
+svm_fl_prefices_fl=${exp_dir_bernoulli}/svm_fl_prefices_fl
+rm -f $svm_labels_fl $svm_component_ids_fl $svm_fl_prefices_fl
+touch $svm_labels_fl $svm_component_ids_fl $svm_fl_prefices_fl
 python local/CGetAllLabels.py --labels ${exp_dir_bernoulli}/bernoulli_train_labels.npy | while read label ; do
     python local/CGetAllComponents.py --labels ${exp_dir_bernoulli}/bernoulli_train_labels.npy --components ${exp_dir_bernoulli}/bernoulli_train_components.npy --label $label | while read component ; do
         echo python local/CTrainComponentSVMs.py --data $train_examples \
@@ -945,6 +950,11 @@ python local/CGetAllLabels.py --labels ${exp_dir_bernoulli}/bernoulli_train_labe
     --label $label\
     --component_id $component\
     --out_svm_prefix ${exp_dir_bernoulli}/svm_bernoulli_train_${label}l_${component}c_ >> $commands_fl
+
+    echo $label >>$svm_labels_fl
+    echo $component >> $svm_component_ids_fl
+    echo ${exp_dir_bernoulli}/svm_bernoulli_train_${label}l_${component}c__linear_reg_plus_plus >> $svm_fl_prefices_fl
+
     done
 done
 
@@ -957,6 +967,12 @@ to perform testing with.  The first thing to check now is the testing
 loss given that we have the new classifier on hand.
 
 \begin{verbatim}
+python local/TestSVMBernoulli.py --data $train_examples\
+    --templates $templates\
+    --svm_labels_fl $svm_labels_fl\
+    --svm_component_ids_fl $svm_component_ids_fl\
+    --svm_fl_prefices_fl $svm_fl_prefices_fl  
+
 
 \end{verbatim}
 
