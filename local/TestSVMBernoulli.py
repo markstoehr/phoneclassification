@@ -54,10 +54,10 @@ def get_bernoulli_templates(template_list):
     template_component_ids = np.array(template_component_ids)
 
     log_inv_templates = np.log(1-templates)
-    log_odds = (np.log(templates) - log_inv_templates).T
+    log_odds = (np.log(templates) - log_inv_templates)
     constants = log_inv_templates.sum(-1)
         
-    return log_odds, constants, template_phn_ids, template_component_ids
+    return log_odds.T, constants, template_phn_ids, template_component_ids
 
 def main(args):
     """
@@ -91,8 +91,6 @@ def main(args):
         is_detection = np.min(top_score_indices,1) < top_scores.shape[1]
         top_predicted_classes[np.arange(len(top_predicted_classes)),
                               first_svm_detection_index]
-        true_classifications = (top_scores < 0).astype(int) * 
-        (top_predicted_classes == phn_id)
         
         import pdb; pdb.set_trace()
 
