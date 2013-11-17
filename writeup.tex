@@ -900,6 +900,7 @@ train_lengths=""
 dev_lengths=""
 phn_ids=""
 phn_id=0
+templates=""
 phns=`cat $data/phone.list`
 for phn in `cat $data/phone.list` ; do
   dev_examples="$dev_examples data/local/data/${phn}_dev_examples.npy"
@@ -908,6 +909,7 @@ for phn in `cat $data/phone.list` ; do
   train_lengths="$train_lengths data/local/data/${phn}_train.lengths"
   phn_ids="$phn_ids $phn_id"
   phn_id=$(( $phn_id + 1 ))
+  templates="$templates ${exp_dir_bernoulli}/${phn}_templates.npy"
 done
 
 
@@ -937,15 +939,20 @@ svm_labels_fl=${exp_dir_bernoulli}/svm_labels_fl
 svm_component_ids_fl=${exp_dir_bernoulli}/svm_component_ids_fl
 svm_fl_prefices_fl=${exp_dir_bernoulli}/svm_fl_prefices_fl
 rm -f $svm_labels_fl $svm_component_ids_fl $svm_fl_prefices_fl
+for penalty in little_reg reg_plus reg_plus_plus ; do
+    rm -f ${svm_fl_prefices_fl}_${penalty}
+    touch ${svm_fl_prefices_fl}_${penalty}
+done
 touch $svm_labels_fl $svm_component_ids_fl $svm_fl_prefices_fl
 python local/CGetAllLabels.py --labels ${exp_dir_bernoulli}/bernoulli_train_labels.npy | while read label ; do
     python local/CGetAllComponents.py --labels ${exp_dir_bernoulli}/bernoulli_train_labels.npy --components ${exp_dir_bernoulli}/bernoulli_train_components.npy --label $label | while read component ; do
-        echo python local/CTrainComponentSVMs.py --data $train_examples \
+        echo python local/CTrainComponentSVMs_Bernoulli.py --data $train_examples \
     --labels ${exp_dir_bernoulli}/bernoulli_train_labels.npy\
     --components ${exp_dir_bernoulli}/bernoulli_train_components.npy\
     --predicted_labels ${exp_dir_bernoulli}/bernoulli_train_top_predicted_labels.npy\
     --predicted_components ${exp_dir_bernoulli}/bernoulli_train_top_predicted_components.npy\
    -v\
+    --templates $templates\
     --config conf/main.config\
     --label $label\
     --component_id $component\
@@ -954,12 +961,22 @@ python local/CGetAllLabels.py --labels ${exp_dir_bernoulli}/bernoulli_train_labe
     echo $label >>$svm_labels_fl
     echo $component >> $svm_component_ids_fl
     echo ${exp_dir_bernoulli}/svm_bernoulli_train_${label}l_${component}c__linear_reg_plus_plus >> $svm_fl_prefices_fl
-
+    for penalty in little_reg reg_plus reg_plus_plus ; do
+        echo ${exp_dir_bernoulli}/svm_bernoulli_train_${label}l_${component}c__linear_${penalty} >> ${svm_fl_prefices_fl}_${penalty}
+    done 
     done
 done
 
+
+svms=""
+num_phns=`wc -l data/local/data/phone.list  | awk '{ print $1 }'`
+for phn_id in `seq 1 1 $num_phns` ; do
+  echo $phn_id
+done
+
+
 cat $commands_fl | while read line; do
-sem --jobs 6 $line
+sem --jobs 7 $line
 done
 \end{verbatim}
 and then we have the set of SVMs that we are going to use
@@ -967,19 +984,43 @@ to perform testing with.  The first thing to check now is the testing
 loss given that we have the new classifier on hand.
 
 \begin{verbatim}
-python local/TestSVMBernoulli.py --data $train_examples\
+
+python local/CTestComponentSVMs.py --data $train_examples \
+   -v\
     --templates $templates\
-    --svm_labels_fl $svm_labels_fl\
-    --svm_component_ids_fl $svm_component_ids_fl\
-    --svm_fl_prefices_fl $svm_fl_prefices_fl  
+    --config conf/main.config\
+    --svms ${svm_fl_prefices_fl}_reg_plus\
+    --leehon_mapping conf/phones.48-39\
+    --phn_ids $data/phone.list\
+    --out_confusion_matrix ${exp_dir_bernoulli}/svm_cascade_confusion48_linear_reg_plus.npy\
+    --out_leehon_confusion_matrix ${exp_dir_bernoulli}/svm_cascade_confusion39_linear_reg_plus.npy
+
+python local/CTestComponentSVMs.py --data $dev_examples \
+   -v\
+    --templates $templates\
+    --config conf/main.config\
+    --svms ${svm_fl_prefices_fl}_little_reg\
+    --leehon_mapping conf/phones.48-39\
+    --phn_ids $data/phone.list\
+    --out_confusion_matrix ${exp_dir_bernoulli}/svm_cascade_confusion48_dev_linear_little_reg.npy\
+    --out_leehon_confusion_matrix ${exp_dir_bernoulli}/svm_cascade_confusion39_dev_linear_little_reg.npy
+
 
 
 \end{verbatim}
+and with this combination of Bernoulli and SVMs I get only 64\% accuracy and then we see that this didn't work at all.
+
+
+\begin{verbatim}
+
+\end{verbatim}
+
 
   In particular, we note that the true label
 is often among the top five predictions.  So we are going to
 rerun the SVM but we only hold the voting among the top five
 predicted classes using the Bernoulli mixture model.
+
 
 
 
