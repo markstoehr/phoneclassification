@@ -3,6 +3,7 @@ import numpy as np
 import argparse, itertools
 from sklearn import svm
 from template_speech_rec import configParserWrapper
+from TestSVMBernoulli import get_bernoulli_templates
 
 def get_false_predicted_label_ranks(
                         label,component,
@@ -27,6 +28,7 @@ def main(args):
     For each label and component constructed a positive and negative
     training set and train a linear SVM to separate them
     """
+    log_odds, constants, template_phn_ids, template_component_ids = get_bernoulli_templates(args.templates)
     labels = np.load(args.labels)
     components = np.load(args.components)
     predicted_labels = np.load(args.predicted_labels)
