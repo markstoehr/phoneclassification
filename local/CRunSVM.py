@@ -1,5 +1,5 @@
 import numpy as np
-import argparse, itertools
+import argparse, itertools, collections
 
 def out_ids_to_svm_scorer(out_ids,num_phns):
     """
@@ -33,9 +33,16 @@ def main(args):
     """
     """
     phn_ids = [ l.split()[1] for l in open(args.phn_ids,'r').read().strip().split('\n')]
+    leehon_mapping_dict = dict(tuple( l.split() for l in open(args.leehon_mapping,'r').read().strip().split('\n')))
+
+
+    
     leehon_matrix = get_leehon_matrix(
-        dict(tuple( l.split() for l in open(args.leehon_mapping,'r').read().strip().split('\n'))),
+        leehon_mapping_dict,
         phn_ids)
+
+
+    
 
     coefs = np.load(args.coefs)
     intercepts = np.load(args.intercepts)
