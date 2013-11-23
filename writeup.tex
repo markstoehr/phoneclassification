@@ -1095,7 +1095,7 @@ python local/CGetAllLabels.py --labels ${exp_dir_bernoulli}/bernoulli_train_labe
     echo $label >>$svm_labels_fl
     echo $component >> $svm_component_ids_fl
     echo ${exp_dir_bernoulli}/svm_bernoulli_train_${label}l_${component}c__linear_reg_plus_plus >> $svm_fl_prefices_fl
-    for penalty in little_reg reg_plus reg_plus_plus ; do
+    for penalty in little_reg reg_plus reg_plus_plus reg_plus_plus_plus ; do
         echo ${exp_dir_bernoulli}/svm_bernoulli_train_${label}l_${component}c__linear_${penalty} >> ${svm_fl_prefices_fl}_${penalty}
     done 
     done
