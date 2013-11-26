@@ -1,0 +1,1870 @@
+% ---- ETD Document Class and Useful Packages ---- %
+\documentclass{article}
+\usepackage{subfigure,epsfig,amsfonts,bigints}
+\usepackage{natbib}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{algorithmic,algorithm}
+\usepackage{caption}
+\usepackage{hyperref}
+\usepackage{fullpage}
+
+%% Use these commands to set biographic information for the title page:
+\title{Phone Classification Work}
+\author{Mark Stoehr}
+\date{\today}
+
+\renewcommand{\algorithmicrequire}{\textbf{Input:}}
+\renewcommand{\algorithmicensure}{\textbf{Output:}}
+
+\begin{document}
+
+\maketitle
+
+We run a variety of experiments for classifying phones with different feature sets.
+\section{aa versus aw}
+
+The experiment is carried out by first extracting the training, development, and test data.  We make use of the
+experimental setup contained in the template speech recognition experiments.  
+
+\subsection{Data Preparation}
+
+To extract the data we first add the directory that will contain the files
+\begin{verbatim}
+export PYTHONPATH=$PYTHONPATH:/home/mark/Template-Speech-Recognition/Development/051913
+export PATH=$PATH:/home/mark/Template-Speech-Recognition/Development/051913
+\end{verbatim}
+and we construct files that include the paths to the data.
+We do this via using a split between the training and test given
+by TIMIT. We also divide the training into a model training portion
+and a development tuning set.  We exclude the \texttt{sa} sentences.
+\begin{verbatim}
+TIMIT=/home/mark/Template-Speech-Recognition/Development/051913
+dir=`pwd`/data/local/data
+mkdir -p $dir
+local=`pwd`/local
+utils=`pwd`/utils
+conf=`pwd`/conf
+
+export KALDI_ROOT=/home/mark/Software/kaldi-trunk
+export PATH=$PWD/utils/:$KALDI_ROOT/src/bin:$KALDI_ROOT/tools/openfst/bin:$KALDI_ROOT/tools/irstlm/bin/:$KALDI_ROOT/src/fstbin/:$KALDI_ROOT/src/gmmbin/:$KALDI_ROOT/src/featbin/:$KALDI_ROOT/src/lm/:$KALDI_ROOT/src/sgmmbin/:$KALDI_ROOT/src/sgmm2bin/:$KALDI_ROOT/src/fgmmbin/:$KALDI_ROOT/src/latbin/:$KALDI_ROOT/src/nnetbin:$KALDI_ROOT/src/nnet-cpubin/:$KALDI_ROOT/src/kwsbin:$PWD:$PATH
+export LC_ALL=C
+
+export PATH=$PATH:$KALDI_ROOT/tools/irstlm/bin
+sph2pipe=$KALDI_ROOT/tools/sph2pipe_v2.5/sph2pipe
+\end{verbatim}
+and these make sure that we have all the files setup to 
+perform the data extraction and get prepped for the experiment.
+The next step is to go into the directory and setup a soft-linked
+version of TIMIT
+\begin{verbatim}
+cd $dir
+
+# Make directory of links to the TIMIT disk.  This relies on the command
+# line arguments being absolute pathnames.
+rm -r links/ 2>/dev/null
+mkdir links/
+
+ln -s $TIMIT links
+\end{verbatim}
+and then we get all the files that say where the data is contained
+\begin{verbatim}
+TrainDir=$TIMIT/train
+find -L $TrainDir \( -iname 's[ix]*.WAV' -o -iname 's[ix]*.wav' \) > train.flst
+$local/flist_to_scp.py < train.flst | sort > train_wav.scp
+cat train_wav.scp | awk '{print $1}' > train.uttids
+cat train_wav.scp | sed 's/wav/phn/'> train_phn.scp
+awk '{print $2}' train_wav.scp > train.wav
+awk '{print $2}' train_phn.scp > train.phn
+# awk '{printf("%s '$sph2pipe' -f wav %s\n", $1, $2);}' < train_dev_sph.scp > train_dev_wav.scp
+\end{verbatim}
+and we can assume that the wav files (as actual wav files) are already
+present in the directory structure since we did this conversion
+earlier on that directory.  This is the complete training set
+as outline in Halberstadt.  The next step is 
+to get the development and test datasets.
+We first output the lists of speakers, as with the training set
+we will exclude the SA sentences
+\begin{verbatim}
+cat << "EOF" | sort > $conf/dev_spk
+faks0
+mmdb1
+mbdg0
+fedw0
+mtdt0
+fsem0
+mdvc0
+mrjm4
+mjsw0
+mteb0
+fdac1
+mmdm2
+mbwm0
+mgjf0
+mthc0
+mbns0
+mers0
+fcal1
+mreb0
+mjfc0
+fjem0
+mpdf0
+mcsh0
+mglb0
+mwjg0
+mmjr0
+fmah0
+mmwh0
+fgjd0
+mrjr0
+mgwt0
+fcmh0
+fadg0
+mrtk0
+fnmr0
+mdls0
+fdrw0
+fjsj0
+fjmg0
+fmml0
+mjar0
+fkms0
+fdms0
+mtaa0
+frew0
+mdlf0
+mrcs0
+majc0
+mroa0
+mrws1
+EOF
+\end{verbatim}
+and the test speakers are
+\begin{verbatim}
+cat << "EOF" | sort > $conf/core_test_spk
+mdab0
+mwbt0
+felc0
+mtas1
+mwew0
+fpas0
+mjmp0
+mlnt0
+fpkt0
+mlll0
+mtls0
+fjlm0
+mbpm0
+mklt0
+fnlp0
+mcmj0
+mjdh0
+fmgd0
+mgrt0
+mnjm0
+fdhc0
+mjln0
+mpam0
+fmld0
+EOF
+\end{verbatim}
+and setup those configuration files we then get the development set
+and core test set data list files
+\begin{verbatim}
+TestDir=$TIMIT/test
+find -L $TestDir \( -iname 's[ix]*.WAV' -o -iname 's[ix]*.wav' \) > test.flst
+$local/flist_to_scp.py < test.flst | sort > test_wav.scp
+cat test_wav.scp | awk '{print $1}' > test.uttids
+cat test_wav.scp | sed 's/wav/phn/'> test_phn.scp
+awk '{print $2}' test_wav.scp > test.wav
+awk '{print $2}' test_phn.scp > test.phn
+\end{verbatim}
+and then we use those configuration files to devide between
+\texttt{dev} and \texttt{core} which refer to the development set
+and core test set, respectively.
+\begin{verbatim}
+$local/extract_by_spk.py -i test_wav.scp --spk $conf/dev_spk > dev_wav.scp
+$local/extract_by_spk.py -i test_wav.scp --spk $conf/core_test_spk > core_test_wav.scp
+$local/extract_by_spk.py -i test_phn.scp --spk $conf/dev_spk > dev_phn.scp
+$local/extract_by_spk.py -i test_phn.scp --spk $conf/core_test_spk > core_test_phn.scp
+
+awk '{print $1}' dev_wav.scp > dev.uttids
+awk '{print $1}' core_test_wav.scp > core_test.uttids
+
+awk '{print $2}' dev_wav.scp > dev.wav
+awk '{print $2}' dev_phn.scp > dev.phn
+awk '{print $2}' core_test_wav.scp > core_test.wav
+awk '{print $2}' core_test_phn.scp > core_test.phn
+\end{verbatim}
+and now we have setup the files for the experiment.
+
+\subsection{Data Extraction}
+
+We use some tools developed for other experiments to get the
+files that contain the instances of the data.
+\begin{verbatim}
+paste train.phn train.wav | CObjectInstances.py --label_sequence aa > aa_train.trans
+paste train.phn train.wav | CObjectInstances.py --label_sequence aw > aw_train.trans
+\end{verbatim}
+we want to extract large enough windows that we get all the examples
+within the window, so, in order to do that we look at the 
+statistics of the lengths of the examples.  The tool we use
+is \texttt{utils/length\_stats.py}
+\begin{verbatim}
+$utils/length_stats.py -i aa_train.trans --out_lengths aa_train.lengths \
+   --out_hist aa_train_lengths.png --nbins 50
+$utils/length_stats.py -i aw_train.trans --out_lengths aw_train.lengths \
+   --out_hist aw_train_lengths.png --nbins 50
+
+maxlength=`cat *.lengths | sort -n | tail -1`
+\end{verbatim}
+now that we have the max length we will extract all of the examplesc
+based on the config file.
+\begin{verbatim}
+cat << "EOF" > $conf/main.config
+[SPECTROGRAM]
+sample_rate=16000
+num_window_samples=320
+num_window_step_samples=80
+fft_length=512
+kernel_length=7
+freq_cutoff=3000
+preemphasis=.95
+use_mel=False
+do_mfccs=False
+no_use_dpss=False
+mel_nbands=40
+num_ceps=13
+liftering=.6
+include_energy=False
+include_deltas=False
+include_double_deltas=False
+delta_window=9
+do_freq_smoothing=False
+mel_smoothing_kernel=-1
+
+[SVM]
+example_length=.2
+kernel='linear'
+penalty_list=['unreg', '1.0',
+                                                 'little_reg','0.1',
+                                                 'reg', '0.05',
+                                                 'reg_plus', '0.01',
+                                                 'reg_plus_plus','0.001']
+
+
+[EDGES]
+block_length=40
+spread_length=1
+threshold=.7
+magnitude_block_length=0
+abst_threshold=(0.025,  0.025,  0.015,  0.015,  0.02 ,  0.02 ,  0.02 ,  0.02 )
+magnitude_threshold=.4
+magnitude_spread=1
+magnitude_and_edge_features=False
+magnitude_features=False
+mag_smooth_freq=0
+mag_downsample_freq=0
+auxiliary_data=False
+auxiliary_threshold=.5
+num_mag_channels=10
+num_axiliary_data=3
+save_parts_S=False
+EOF
+\end{verbatim}
+an important component of this is the
+\texttt{example\_length} under \texttt{[SVM]} which is the number
+of milliseconds that we want to capture the phone for
+and then we have the subtle issue of timing arise since the statistics of the data are computed over frames which are subsampled
+from the data and this needs to be considered in order to compute
+the actual segmens that we are going to extract.  However, we are
+basing this experiment on the work of Joakim anden and they used
+a $T=200ms$ time which corresponds to $38$ frames as given
+the $80$ sample subsample factor for the frames (where we only count to the middle of the last frame).  So we center
+the frames as best we can given the input data.  Namely we wish to compute the squared distance over all the frames for the extracted data from the middle sample of the example phone and pick the set
+of frames that minimize that distance.
+
+The formalu is that the interval chosen will have the form
+$$ [80t, 80t+38*80+160)  $$
+which may be written more generally
+$$ [ht,ht+N] $$
+where $h$ is the subsample factor for the feature vectors and
+$N$ is the window length in samples for what frames will be used in
+the object.  
+The actual example will be in an interval $[a,b]$
+we wish to minimize the sum of squared distances to 
+$$ \frac{a+b}{2}$$
+in the samples of the given interval
+given a choice of an integer $t$.  The cost $C(t)$ for a given choice
+of $t$ is
+\begin{equation}\begin{array}{rcl}
+C(t) &=& \sum_{\tau=0}^{N-1} \left(ht+\tau-\frac{a+b}{2}\right)^2\\
+&=& \sum_{\tau=0}^{N-1} (ht+\tau)^2-2(ht+\tau)\frac{a+b}{2} +\left(\frac{a+b}{2}\right)^2 
+\end{array}\end{equation}
+so that the equivalent optimization is
+\begin{equation}
+\arg\min_t C(t) = \arg\min_t \sum_{\tau=0}^{N-1} (ht+\tau)^2-2(ht+\tau)\frac{a+b}{2}
+\end{equation}
+so taking the derivative and equating to zero we get
+\begin{equation}\begin{array}{rcl}
+\sum_{\tau=0}^{N-1} 2h(ht+\tau)- 2h\frac{a+b}{2} &=& 0\\
+Nht &=& N\frac{a+b}{2}-\frac{N(N-1)}{2}\\
+t &=& \frac{a+b-N+1}{2h}
+\end{array}
+\end{equation}
+and then will just let $t$ be the integer that is closest to that
+value.
+
+The code that implements this can then output the start and end
+frames relative to the settings given by \texttt{main.config}
+\begin{verbatim}
+$local/sampletrans2frametrans.py -c $conf/main.config --transcript aa_train.trans\
+  > aa_train.frame_trans
+$local/sampletrans2frametrans.py -c $conf/main.config --transcript aw_train.trans\
+  > aw_train.frame_trans
+\end{verbatim}
+and having developed those we may then actually do the extraction
+of the data matrices
+\begin{verbatim}
+$local/extract_data_matrix.py -c $conf/main.config --transcript aa_train.frame_trans\
+  --uttids train.uttids\
+  --output aa_train_examples.npy\
+  --output_spec aa_train_examples_S.npy\
+  --output_info aa_train_info.npy
+$local/extract_data_matrix.py -c $conf/main.config --transcript aw_train.frame_trans\
+  --uttids train.uttids\
+  --output aw_train_examples.npy\
+  --output_spec aw_train_examples_S.npy\
+  --output_info aw_train_info.npy
+\end{verbatim}
+which completes the data extraction step for the training data. The files that were created are
+\begin{verbatim}
+[aa,aw]_train_examples.npy
+[aa,aw]_train_examples_S.npy
+[aa,aw]_train_info.npy
+\end{verbatim}
+where the first is all the examples in a matrix for the binary
+features, \texttt{aa\_train\_examples\_S.npy} contains the spectrogram
+features, and
+\texttt{aa\_train\_info.npy} is a four column array where each 
+row corresponds to an example, the first column is the utterance
+id (which is the row of the utterance in \texttt{train.uttids}),
+the second column is the order of the examples sorted by time in the utterance
+(the first occurrence within the utterance is zero,
+second occurrence is one, etc.), and the last two columns are the
+start and end frames for the extracted examples.
+
+The extraction for the test data runs as follows
+\begin{verbatim}
+for pref in dev core_test ; do
+    paste ${pref}.phn ${pref}.wav | CObjectInstances.py --label_sequence aa\
+      > aa_${pref}.trans
+    paste ${pref}.phn ${pref}.wav | CObjectInstances.py --label_sequence aw\
+      > aw_${pref}.trans
+
+    $local/sampletrans2frametrans.py -c $conf/main.config --transcript aa_${pref}.trans\
+      > aa_${pref}.frame_trans
+    $local/sampletrans2frametrans.py -c $conf/main.config --transcript aw_${pref}.trans\
+      > aw_${pref}.frame_trans
+
+    $local/extract_data_matrix.py -c $conf/main.config\
+      --transcript aa_${pref}.frame_trans\
+      --uttids ${pref}.uttids\
+      --output aa_${pref}_examples.npy\
+      --output_spec aa_${pref}_examples_S.npy\
+      --output_info aa_${pref}_info.npy
+    $local/extract_data_matrix.py -c $conf/main.config\
+      --transcript aw_${pref}.frame_trans\
+      --uttids ${pref}.uttids\
+      --output aw_${pref}_examples.npy\
+      --output_spec aw_${pref}_examples_S.npy\
+      --output_info aw_${pref}_info.npy
+
+done
+\end{verbatim}
+whcih completes the extraction.  The \texttt{--output} flat on the
+call to \texttt{\$local/extract\_data\_matrix.py} indicates
+where the data is saved to.
+
+\section{Training the SVM}
+
+We first create an experiment directory
+\begin{verbatim}
+cd ../../../
+exp_dir=exp/aw_aa_exp
+mkdir -p $exp_dir
+datadir=$dir
+\end{verbatim}
+and then we train the svm on the extracted examples
+under a variety of settings (as spelled out in \texttt{conf/main.config}).  The command to do this is
+\begin{verbatim}
+CSVMTrain.py --input_data_matrices $datadir/aa_train_examples.npy\
+    $datadir/aw_train_examples.npy\
+    --input_test_data_matrices $datadir/aa_dev_examples.npy\
+    $datadir/aw_dev_examples.npy --output_fls_prefix $exp_dir/svm_train\
+    --config $conf/main.config -v
+\end{verbatim}
+and this outputs a set of svm filters and results for the development
+data set (we wait to do the core test set experiment until after.
+The lowest error rate we obtained was $12.12\%$ which gets very
+low error on \texttt{aa} but $44\%$ error on \texttt{aw}.
+
+\section{Extract matrices for all data}
+
+Given the success of running that first experiment we now collect
+data for all the examples. This means that the procedure outlined above is generalized.  The first step to do this is to get the list
+of phones, and also get the phone-mappings where we map down to 48 phone classes from the complete 61 classes (and exclude \texttt{q}).
+We do
+\begin{verbatim}
+cat << "EOF" > $conf/phones.60-48
+aa aa
+ae ae
+ah ah
+ao ao
+aw aw
+ax ax
+ax-h ax
+axr er
+ay ay
+b b
+bcl vcl
+ch ch
+d d
+dcl vcl
+dh dh
+dx dx
+eh eh
+el el
+em m
+en en
+eng ng
+epi epi
+er er
+ey ey
+f f
+g g
+gcl vcl
+h# sil
+hh hh
+hv hh
+ih ih
+ix ix
+iy iy
+jh jh
+k k
+kcl cl
+l l
+m m
+n n
+ng ng
+nx n
+ow ow
+oy oy
+p p
+pau sil
+pcl cl
+r r
+s s
+sh sh
+t t
+tcl cl
+th th
+uh uh
+uw uw
+ux uw
+v v
+w w
+y y
+z z
+zh zh
+EOF
+\end{verbatim}
+and for testing we do
+\begin{verbatim}
+cat << "EOF" > $conf/phones.48-39
+aa aa
+ae ae
+ah ah
+ao aa
+aw aw
+ax ah
+ay ay
+b b
+ch ch
+cl sil
+d d
+dh dh
+dx dx
+eh eh
+el l
+en n
+epi sil
+er er
+ey ey
+f f
+g g
+hh hh
+ih ih
+ix ih
+iy iy
+jh jh
+k k
+l l
+m m
+n n
+ng ng
+ow ow
+oy oy
+p p
+r r
+s s
+sh sh
+sil sil
+t t
+th th
+uh uh
+uw uw
+v v
+vcl sil
+w w
+y y
+z z
+zh sh
+EOF
+\end{verbatim}
+and then  we get the list of phone classes that we are going to train
+as
+\begin{verbatim}
+awk '{ print $2 }' $conf/phones.60-48 | sort | uniq > $datadir/phone.list
+\end{verbatim}
+which gives us the set of phones that we can loop through to extract
+all of the relevant training data.
+We then do
+\begin{verbatim}
+cd $datadir
+cat $datadir/phone.list | while read phn   ; do
+    echo ${phn}
+    for data_set in train dev core_test ; do
+        echo ${data_set}
+        paste ${data_set}.phn ${data_set}.wav | CObjectInstances.py\
+            --label_sequence $phn\
+            --phone_reduction_file $conf/phones.60-48\
+            > ${phn}_${data_set}.trans
+
+        $utils/length_stats.py -i ${phn}_${data_set}.trans\
+            --uttids ${data_set}.uttids\
+            --out_lengths ${phn}_${data_set}.lengths \
+            --out_hist ${phn}_${data_set}_lengths.png --nbins 50
+
+        $local/sampletrans2frametrans.py -c $conf/main.config\
+            --transcript ${phn}_${data_set}.trans\
+            > ${phn}_${data_set}.frame_trans
+
+        $local/extract_data_matrix.py -c $conf/main.config --transcript ${phn}_${data_set}.frame_trans\
+            --uttids ${data_set}.uttids\
+            --output ${phn}_${data_set}_examples.npy\
+            --output_spec ${phn}_${data_set}_examples_S.npy\
+            --output_info ${phn}_${data_set}_info.npy
+    done
+done
+\end{verbatim}
+and then we verify that we produced all of the features that
+we think we produced
+\begin{verbatim}
+rm -f all_data_matrix_list
+touch all_data_matrix_list
+cd $datadir
+cat $datadir/phone.list | while read phn   ; do
+    echo ${phn}
+    for data_set in train dev core_test ; do
+        echo ${phn}_${data_set}_examples.npy >> all_data_matrix_list
+        echo ${phn}_${data_set}_examples_S.npy >> all_data_matrix_list
+        echo ${phn}_${data_set}_info.npy >> all_data_matrix_list
+    done
+done
+
+sort all_data_matrix_list | uniq > tmp
+cp tmp all_data_matrix_list
+
+ls -1 | sort | uniq > file_list
+\end{verbatim}
+
+another part of the standard svm setup is that we want the lengths
+and the example lengths which were computed by the file \texttt{\$utils/length\_stats.py} and saved to the files of the form \texttt{\$\{phn\}\_\$\{data\_set\}.lengths} which have a three column format
+where the first column is the numeric utterance index (which is the
+order of the utterance in the \texttt{\$\{data\_set\}.uttids} file),
+the order the example came in, and the length in samples.
+
+
+\section{Training Models}
+
+We use two approaches, the first is to just use the SVM which 
+we experiment with right now.  And we also supplement the 
+decision function with the length information.
+
+\subsection{SVM training}
+
+\begin{verbatim}
+cd ../../../
+exp_dir=exp/all_phones_exp
+mkdir -p $exp_dir
+datadir=$dir
+\end{verbatim}
+and then we train the svm on the extracted examples
+under a variety of settings (as spelled out in \texttt{conf/main.config}).  The command to do the trainging (it also does a little
+testing) is
+\begin{verbatim}
+CSVMTrain.py --input_data_matrices $datadir/aa_train_examples.npy\
+    $datadir/aw_train_examples.npy\
+    --input_test_data_matrices $datadir/aa_dev_examples.npy\
+    $datadir/aw_dev_examples.npy --output_fls_prefix $exp_dir/svm_train\
+    --config $conf/main.config -v
+\end{verbatim}
+and after we run that over all pairs of examples as follows
+\begin{verbatim}
+set -- `cat $datadir/phone.list`
+for phn1 ; do
+    shift
+    for phn2 ; do
+        echo "$phn1 against $phn2"
+        CSVMTrain.py --input_data_matrices\
+            $datadir/${phn1}_train_examples.npy\
+            $datadir/${phn2}_train_examples.npy\
+            --input_test_data_matrices\
+            $datadir/${phn1}_dev_examples.npy\
+            $datadir/${phn2}_dev_examples.npy\
+            --input_lengths\
+            $datadir/${phn1}_train.lengths\
+            $datadir/${phn2}_train.lengths\
+            --input_test_lengths\
+            $datadir/${phn1}_dev.lengths\
+            $datadir/${phn2}_dev.lengths\
+            --output_fls_prefix $exp_dir/svm_train_${phn1}_${phn2}\
+            --config $conf/main.config -v
+    done
+done
+\end{verbatim}
+the bash portion of this is a little tricky -- we get bash to
+make the phone list into the input arguments and shift through
+them.
+
+\begin{verbatim}
+datadir=data/local/data
+exp_dir=exp/all_phones_exp
+commands_fl=$exp_dir/commands_fl
+rm -f $commands_fl
+set -- `cat $datadir/phone.list`
+for phn1 ; do
+    shift
+    for phn2 ; do
+        echo "$phn1 against $phn2"
+        echo CSVMTrain.py --input_data_matrices\
+            $datadir/${phn1}_train_examples.npy\
+            $datadir/${phn2}_train_examples.npy\
+            --input_test_data_matrices\
+            $datadir/${phn1}_dev_examples.npy\
+            $datadir/${phn2}_dev_examples.npy\
+            --input_lengths\
+            $datadir/${phn1}_train.lengths\
+            $datadir/${phn2}_train.lengths\
+            --input_test_lengths\
+            $datadir/${phn1}_dev.lengths\
+            $datadir/${phn2}_dev.lengths\
+            --output_fls_prefix $exp_dir/svm_train_${phn1}_${phn2}\
+            --config $conf/main.config -v >> $commands_fl
+    done
+done
+\end{verbatim}
+which will save all of the commands to
+\texttt{commands_fl}
+and then we add parallel to the commands
+\begin{verbatim}
+parallel=~/bin/parallel
+\end{verbatim}
+and then we can write the commands
+\begin{verbatim}
+$parallel --semaphore --jobs 6  --joblog $exp_dir/parallel.log -a $commands_fl
+\end{verbatim}
+and we also need to check how many have been completed at a given
+time just in case the jobs get interrupted
+we do this with
+\begin{verbatim}
+last_commands_fl=$exp_dir/last_commands_fl
+local/check_completed.py < $commands_fl > $last_commands_fl
+\end{verbatim}
+and then we run it with
+\begin{verbatim}
+$parallel --semaphore --jobs 6  --joblog $exp_dir/parallel.log -a $last_commands_fl
+\end{verbatim}
+\begin{verbatim}
+cat $last_commands_fl | while read line; do
+sem --jobs 6 $line
+done
+
+\end{verbatim}
+We construct a file with all of those commands listed in it 
+
+\subsubsection{Scoring}
+
+
+\begin{verbatim}
+datadir=data/local/data
+exp_dir=exp/all_phones_exp
+phn_pairs=''
+coef_fls=''
+intercept_fls=''
+penalty=reg_plus_plus
+set -- `cat $datadir/phone.list`
+for phn1 ; do
+    shift
+    for phn2 ; do
+        phn_pairs="$phn_pairs $phn1 $phn2"
+	coef_fls="$coef_fls $exp_dir/svm_train_${phn1}_${phn2}_linear_${penalty}_coef.npy"
+        intercept_fls="$intercept_fls $exp_dir/svm_train_${phn1}_${phn2}_linear_${penalty}_intercept.npy"
+    done
+done
+\end{verbatim}
+and then we get
+\begin{verbatim}
+penalties="little_reg reg_plus reg_plus_plus reg_plus_plus_plus"
+for penalty in $penalties; do
+python local/CCollectSVMs.py --coefs $coef_fls --intercepts $intercept_fls --out_coefs $exp_dir/svm_train_all_pairs_linear_${penalty}_coefs.npy --out_intercepts $exp_dir/svm_train_all_pairs_linear_${penalty}_intercepts.npy --label_pairs $phn_pairs --out_ids $exp_dir/svm_train_all_pairs_${penalty}.ids --phns_to_ids $exp_dir/svm_train_all_pairs_${penalty}_phns.ids
+done
+
+\end{verbatim}
+and then we are ready to test these on a given test set and get the scoring.
+\begin{verbatim}
+datadir=data/local/data
+exp_dir=exp/all_phones_exp
+dev_examples=""
+dev_lengths=""
+phn_ids=""
+phn_id=0
+for phn in `cat $datadir/phone.list` ; do
+  dev_examples="$dev_examples data/local/data/${phn}_dev_examples.npy"
+  dev_lengths="$dev_lengths data/local/data/${phn}_dev.lengths"
+  phn_ids="$phn_ids $phn_id"
+  phn_id=$(( $phn_id + 1 ))
+done
+
+for penalty in $penalties ; do
+python local/CRunSVM.py \
+  --coefs $exp_dir/svm_train_all_pairs_linear_${penalty}_coefs.npy\
+  --intercepts $exp_dir/svm_train_all_pairs_linear_${penalty}_intercepts.npy\
+  --out_ids $exp_dir/svm_train_all_pairs_${penalty}.ids\
+  --input_data_matrices $dev_examples\
+  --input_lengths $dev_lengths\
+  --out_confusion_matrix $exp_dir/svm_all_pairs_${penalty}_confusion.npy\
+  --out_leehon_confusion_matrix $exp_dir/svm_all_pairs_${penalty}_leehon_confusion.npy\
+  --input_ids $phn_ids\
+  --leehon_mapping conf/phones.48-39\
+  --phn_ids $exp_dir/svm_train_all_pairs_${penalty}_phns.ids
+done
+
+\end{verbatim}
+
+One thing that also needs to be done is to check the mistakes
+made in the Leehon confusion matrix.  To do this we first
+need to get a sense of the mapping between leehon phn ids and
+the phones
+
+\begin{verbatim}
+python local/get_leehon_index_mapping.py --leehon_mapping conf/phones.48-39\
+   --phns data/local/data/phone.list
+\end{verbatim}
+and we get this list
+\begin{verbatim}
+1 ae
+2 ah ax
+3 aw
+4 ay
+5 b
+6 ch
+7 d
+8 dh
+9 dx
+10 eh
+11 er
+12 ey
+13 f
+14 g
+15 hh
+16 ih ix
+17 iy
+18 jh
+19 k
+20 el l
+21 m
+22 en n
+23 ng
+24 ow
+25 oy
+26 p
+27 r
+28 s
+29 sh zh
+30 cl epi sil vcl
+31 t
+32 th
+33 uh
+34 uw
+35 v
+36 w
+37 y
+38 z
+\end{verbatim}
+and from the leehon confusion matrix we see that
+ah ax are often confused to be ih ix
+and that z is often classified as s. We are thus going to 
+put a great deal more effort into getting these classifications
+correct.  Another hard one is m is classified as en or n. Another
+hard one is eh versus ih ix.  For stop consonants the most 
+problematic is t versus k.
+
+
+
+\subsection{Mixture Model training}
+
+We then have commands setup to write
+\begin{verbatim}
+mkdir -p exp/bernoulli_all_phones
+exp_dir=exp/bernoulli_all_phones
+data=data/local/data
+for phn in `cat ${data}/phone.list` ; do
+   echo phn=${phn}
+   python local/CBernoulliMMTrain.py --config conf/main.config \
+      --input_data_matrix ${data}/${phn}_train_examples.npy \
+      --templates ${exp_dir}/${phn}_templates.npy \
+      --weights ${exp_dir}/${phn}_weights.npy \
+      --underlying_data ${data}/${phn}_train_examples_S.npy \
+      --spec_templates ${exp_dir}/${phn}_S_templates.npy \
+      --viz_spec_templates ${exp_dir}/${phn}_S_templates -v
+done
+
+for phn in `cat ${data}/phone.list` ; do
+   echo phn=${phn}
+   python local/check_components_nondegenerate.py --config conf/main.config \
+      --input_data_matrix ${data}/${phn}_train_examples.npy \
+      --templates ${exp_dir}/${phn}_templates.npy \
+      --weights ${exp_dir}/${phn}_weights.npy \
+      --underlying_data ${data}/${phn}_train_examples_S.npy \
+      --spec_templates ${exp_dir}/${phn}_S_templates.npy \
+      --viz_spec_templates ${exp_dir}/${phn}_S_templates -v
+done
+
+
+
+
+\end{verbatim}
+
+and then we collect together the various models so that way
+we can score
+
+\begin{verbatim}
+data=data/local/data
+exp_dir=exp/bernoulli_all_phones
+dev_examples=""
+train_examples=""
+templates=""
+for phn in `cat ${data}/phone.list` ; do
+  dev_examples="$dev_examples ${data}/${phn}_dev_examples.npy"
+  train_examples="$train_examples ${data}/${phn}_train_examples.npy"
+  templates="$templates ${exp_dir}/${phn}_templates.npy"
+done
+
+python local/CTestBernoulli.py --data $dev_examples --templates $templates\
+    --out_scores ${exp_dir}/bernoulli_dev_scores.npy\
+    --out_labels ${exp_dir}/bernoulli_dev_labels.npy\
+    --out_components ${exp_dir}/bernoulli_dev_components.npy\
+    --out_top_predicted_labels ${exp_dir}/bernoulli_dev_top_predicted_labels.npy\
+    --out_top_predicted_components ${exp_dir}/bernoulli_dev_top_predicted_components.npy
+
+python local/CTestBernoulli.py --data $train_examples --templates $templates\
+    --out_scores ${exp_dir}/bernoulli_train_scores.npy\
+    --out_labels ${exp_dir}/bernoulli_train_labels.npy\
+    --out_components ${exp_dir}/bernoulli_train_components.npy\
+    --out_top_predicted_labels ${exp_dir}/bernoulli_train_top_predicted_labels.npy\
+    --out_top_predicted_components ${exp_dir}/bernoulli_train_top_predicted_components.npy
+
+
+\end{verbatim}
+these two give us a sense of the performance on the training and
+testing data of the two models.  The results show that we get
+a 58\% accuracy using the edges on the training data and a
+54\% accuracy using the edges on the testing data. This indicates
+that the two data sets are actually very similar.
+
+\subsection{Combining the SVM with Bernoulli mixtures}
+However, one statistic that we take note of is that most
+of the true labels appear in the top few predicted labels. 
+Hence it might make sense to run the SVM voting code but only
+over the top predicted labels and see what the results are.
+
+We run the following code to test that idea
+\begin{verbatim}
+exp_dir=exp/all_phones_exp
+exp_dir_bernoulli=exp/bernoulli_all_phones
+dev_examples=""
+dev_lengths=""
+phn_ids=""
+phn_id=0
+for phn in `cat $data/phone.list` ; do
+  dev_examples="$dev_examples data/local/data/${phn}_dev_examples.npy"
+  dev_lengths="$dev_lengths data/local/data/${phn}_dev.lengths"
+  phn_ids="$phn_ids $phn_id"
+  phn_id=$(( $phn_id + 1 ))
+done
+
+#for penalty in $penalties ; do
+penalty=reg_plus_plus
+python local/CRunSVMTopVotes.py \
+  --coefs $exp_dir/svm_train_all_pairs_linear_${penalty}_coefs.npy\
+  --intercepts $exp_dir/svm_train_all_pairs_linear_${penalty}_intercepts.npy\
+  --out_ids $exp_dir/svm_train_all_pairs_${penalty}.ids\
+  --input_data_matrices $dev_examples\
+  --input_lengths $dev_lengths\
+  --out_confusion_matrix $exp_dir_bernoulli/svm_all_pairs_top_bernouli_votes_${penalty}_confusion.npy\
+  --out_leehon_confusion_matrix $exp_dir_bernoulli/svm_all_pairs_top_bernouli_votes_${penalty}_leehon_confusion.npy\
+  --input_ids $phn_ids\
+  --leehon_mapping conf/phones.48-39\
+  --phn_ids $exp_dir/svm_train_all_pairs_${penalty}_phns.ids\
+  --top_predicted_labels $exp_dir_bernoulli/bernoulli_dev_top_predicted_labels.npy
+
+#done
+
+\end{verbatim}
+and this proposed ``fix'' only gets us 70\%
+accuracy which is a step in the wrong direction from the SVM, although it is an improvement over the Bernoulli model.
+Instead we are going to use the Bernoulli mixture modeling in order
+to cluster the instances and figure out where the mistakes are being
+made.
+
+This gets into a hierarchical learning method where we train
+true detections for a cluster against its mistakes.  In this
+setup we associate each data point with its predicted class
+and the predicted label.  We run a command which goes through
+every class, and every components, finds the hits, mistakes, and
+misses, and then we construct from that a training set which
+may then be used to train an SVM. 
+
+The first attempt is to do a one-vs-rest strategy, in which case
+we train an SVM for each component.  We will then pick the component that
+achieved the largest likelihood and is classified as yes.
+The code for running the SVMs is here
+\begin{verbatim}
+data=data/local/data
+exp_dir=exp/all_phones_exp
+exp_dir_bernoulli=exp/bernoulli_all_phones
+dev_examples=""
+train_examples=""
+train_lengths=""
+dev_lengths=""
+phn_ids=""
+phn_id=0
+templates=""
+phns=`cat $data/phone.list`
+for phn in `cat $data/phone.list` ; do
+  dev_examples="$dev_examples data/local/data/${phn}_dev_examples.npy"
+  dev_lengths="$dev_lengths data/local/data/${phn}_dev.lengths"
+  train_examples="$train_examples data/local/data/${phn}_train_examples.npy"
+  train_lengths="$train_lengths data/local/data/${phn}_train.lengths"
+  phn_ids="$phn_ids $phn_id"
+  phn_id=$(( $phn_id + 1 ))
+  templates="$templates ${exp_dir_bernoulli}/${phn}_templates.npy"
+done
+
+
+
+python local/CTrainComponentSVMs.py --data $train_examples \
+    --labels ${exp_dir_bernoulli}/bernoulli_train_labels.npy\
+    --components ${exp_dir_bernoulli}/bernoulli_train_components.npy\
+    --predicted_labels ${exp_dir_bernoulli}/bernoulli_train_top_predicted_labels.npy\
+    --predicted_components ${exp_dir_bernoulli}/bernoulli_train_top_predicted_components.npy\
+   -v\
+    --config conf/main.config\
+    --label 0\
+    --component_id 0\
+    --out_svm_prefix ${exp_dir_bernoulli}/svm_bernoulli_train_0l_0c_
+
+
+
+\end{verbatim}
+and having established that works we can then run a multicore version
+training all of them at once. We do this by first generating a list
+of all the labels and components
+\begin{verbatim}
+commands_fl=${exp_dir_bernoulli}/commands_fl
+rm -f $commands_fl
+touch $commands_fl
+svm_labels_fl=${exp_dir_bernoulli}/svm_labels_fl
+svm_component_ids_fl=${exp_dir_bernoulli}/svm_component_ids_fl
+svm_fl_prefices_fl=${exp_dir_bernoulli}/svm_fl_prefices_fl
+rm -f $svm_labels_fl $svm_component_ids_fl $svm_fl_prefices_fl
+for penalty in little_reg reg_plus reg_plus_plus ; do
+    rm -f ${svm_fl_prefices_fl}_${penalty}
+    touch ${svm_fl_prefices_fl}_${penalty}
+done
+touch $svm_labels_fl $svm_component_ids_fl $svm_fl_prefices_fl
+python local/CGetAllLabels.py --labels ${exp_dir_bernoulli}/bernoulli_train_labels.npy | while read label ; do
+    python local/CGetAllComponents.py --labels ${exp_dir_bernoulli}/bernoulli_train_labels.npy --components ${exp_dir_bernoulli}/bernoulli_train_components.npy --label $label | while read component ; do
+        echo python local/CTrainComponentSVMs_Bernoulli.py --data $train_examples \
+    --labels ${exp_dir_bernoulli}/bernoulli_train_labels.npy\
+    --components ${exp_dir_bernoulli}/bernoulli_train_components.npy\
+    --predicted_labels ${exp_dir_bernoulli}/bernoulli_train_top_predicted_labels.npy\
+    --predicted_components ${exp_dir_bernoulli}/bernoulli_train_top_predicted_components.npy\
+   -v\
+    --templates $templates\
+    --config conf/main.config\
+    --label $label\
+    --component_id $component\
+    --out_svm_prefix ${exp_dir_bernoulli}/svm_bernoulli_train_${label}l_${component}c_ >> $commands_fl
+
+    echo $label >>$svm_labels_fl
+    echo $component >> $svm_component_ids_fl
+    echo ${exp_dir_bernoulli}/svm_bernoulli_train_${label}l_${component}c__linear_reg_plus_plus >> $svm_fl_prefices_fl
+    for penalty in little_reg reg_plus reg_plus_plus ; do
+        echo ${exp_dir_bernoulli}/svm_bernoulli_train_${label}l_${component}c__linear_${penalty} >> ${svm_fl_prefices_fl}_${penalty}
+    done 
+    done
+done
+
+
+svms=""
+num_phns=`wc -l data/local/data/phone.list  | awk '{ print $1 }'`
+for phn_id in `seq 1 1 $num_phns` ; do
+  echo $phn_id
+done
+
+
+cat $commands_fl | while read line; do
+sem --jobs 7 $line
+done
+\end{verbatim}
+and then we have the set of SVMs that we are going to use
+to perform testing with.  The first thing to check now is the testing
+loss given that we have the new classifier on hand.
+
+\begin{verbatim}
+
+python local/CTestComponentSVMs.py --data $train_examples \
+   -v\
+    --templates $templates\
+    --config conf/main.config\
+    --svms ${svm_fl_prefices_fl}_reg_plus\
+    --leehon_mapping conf/phones.48-39\
+    --phn_ids $data/phone.list\
+    --out_confusion_matrix ${exp_dir_bernoulli}/svm_cascade_confusion48_linear_reg_plus.npy\
+    --out_leehon_confusion_matrix ${exp_dir_bernoulli}/svm_cascade_confusion39_linear_reg_plus.npy
+
+python local/CTestComponentSVMs.py --data $dev_examples \
+   -v\
+    --templates $templates\
+    --config conf/main.config\
+    --svms ${svm_fl_prefices_fl}_little_reg\
+    --leehon_mapping conf/phones.48-39\
+    --phn_ids $data/phone.list\
+    --out_confusion_matrix ${exp_dir_bernoulli}/svm_cascade_confusion48_dev_linear_little_reg.npy\
+    --out_leehon_confusion_matrix ${exp_dir_bernoulli}/svm_cascade_confusion39_dev_linear_little_reg.npy
+
+\end{verbatim}
+and with this combination of Bernoulli and SVMs I get only 64\% accuracy and then we see that this didn't work at all.
+
+Another question is whether better features will improve the classification rate.
+
+\begin{verbatim}
+
+\end{verbatim}
+
+
+  In particular, we note that the true label
+is often among the top five predictions.  So we are going to
+rerun the SVM but we only hold the voting among the top five
+predicted classes using the Bernoulli mixture model.
+
+\subsection{Normalizing the likelihood scores on the data}
+
+Another possibility is to get the SVM scores for all the trained
+data and try to normalize the score.  We could try to find
+normalizations for the likelihood ratio test statistic
+and for the svm.  Although the SVM should already be normalized.
+The thing about normalization is we could first see
+whether the likelihood computations are even able to separate the
+different components well at all.
+
+\begin{verbatim}
+python local/CNormalizeBernoulli.py --config main.config -v\
+    --data $train_examples\
+    --templates $templates\
+    --template_off_means ${exp_dir_bernoulli}/bernoulli_train_mean_off_class.npy\
+    --template_off_stdevs ${exp_dir_bernoulli}/bernoulli_train_stdev_off_class.npy
+
+
+python local/CTestNormalizeBernoulli.py --config main.config -v\
+    --data $dev_examples\
+    --templates $templates\
+    --template_off_means ${exp_dir_bernoulli}/bernoulli_train_mean_off_class.npy\
+    --template_off_stdevs ${exp_dir_bernoulli}/bernoulli_train_stdev_off_class.npy
+
+
+
+\end{verbatim}
+
+
+
+Each line indicates the percentage of true labels in the top $k$
+labels where $k$ is the left column number.
+\begin{verbatim}
+0 0.545062097363
+1 0.721989772199
+2 0.803546523212
+3 0.8505678422
+4 0.883044431162
+5 0.904562661885
+6 0.920435677758
+7 0.931659693166
+8 0.940824865511
+9 0.94813043767
+10 0.953974895397
+11 0.959620110248
+12 0.964866839344
+13 0.969183768347
+14 0.972770140134
+15 0.976290097629
+16 0.979013083616
+17 0.981271169556
+18 0.983064355449
+19 0.984658298466
+\end{verbatim}
+
+
+\section{Using Parts}
+
+We write a file to compile samples from the training to train
+parts and we will start by training parts for the different phone
+classes.
+\begin{verbatim}
+data=data/local/data
+exp_dir=exp/all_phones_exp
+exp_dir_bernoulli=exp/bernoulli_all_phones
+dev_examples=""
+train_examples=""
+train_examples_S=""
+save_parts=""
+spec_save_parts=""
+viz_spec_parts=""
+phns=`cat $data/phone.list`
+for phn in `cat $data/phone.list` ; do
+  dev_examples="$dev_examples data/local/data/${phn}_dev_examples.npy"
+  train_examples="$train_examples data/local/data/${phn}_train_examples.npy"
+  train_examples_S="$train_examples_S data/local/data/${phn}_train_examples_S.npy"
+  save_parts="$save_parts ${exp_dir_bernoulli}/${phn}_train_parts.npy"
+  spec_save_parts="$spec_save_parts ${exp_dir_bernoulli}/${phn}_train_parts_S.npy"
+  viz_spec_parts="$viz_spec_parts ${exp_dir_bernoulli}/${phn}_train_parts_S.png"
+
+done
+
+
+python local/CExtractPatches.py --config conf/main.config -v\
+    --data $train_examples\
+    --data_spec $train_examples_S\
+    --save_parts $save_parts\
+    --spec_save_parts $spec_save_parts\
+    --viz_spec_parts $viz_spec_parts
+
+
+data=data/local/data
+exp_dir=exp/all_phones_exp
+exp_dir_bernoulli=exp/bernoulli_all_phones
+dev_examples=""
+train_examples=""
+train_examples_S=""
+save_parts=""
+spec_save_parts=""
+viz_spec_parts=""
+phns=`cat $data/phone.list`
+for phn in `cat $data/phone.list` ; do
+  dev_examples="$dev_examples data/local/data/${phn}_dev_examples.npy"
+  train_examples="$train_examples data/local/data/${phn}_train_examples.npy"
+  train_examples_S="$train_examples_S data/local/data/${phn}_train_examples_S.npy"
+  save_parts="$save_parts ${exp_dir_bernoulli}/${phn}_train_parts_3r_70p.npy"
+  spec_save_parts="$spec_save_parts ${exp_dir_bernoulli}/${phn}_train_parts_S_3r_70p.npy"
+  viz_spec_parts="$viz_spec_parts ${exp_dir_bernoulli}/${phn}_train_parts_S_3r_70p.png"
+
+done
+
+python local/CExtractPatches.py --config conf/main.config -v\
+    --data $train_examples\
+    --data_spec $train_examples_S\
+    --save_parts ${exp_dir_bernoulli}/all_save_parts_4r_70p.npy\
+    --spec_save_parts ${exp_dir_bernoulli}/all_spec_save_parts_4r_70p.npy\
+    --viz_spec_parts ${exp_dir_bernoulli}/all_viz_parts_4r_70p.png\
+    --n_components 70\
+    --patch_radius 4
+
+
+python local/CExtractPatches.py --config conf/main.config -v\
+    --data $train_examples\
+    --data_spec $train_examples_S\
+    --save_parts ${exp_dir_bernoulli}/all_save_parts_6r_150p.npy\
+    --spec_save_parts ${exp_dir_bernoulli}/all_spec_save_parts_6r_150p.npy\
+    --viz_spec_parts ${exp_dir_bernoulli}/all_viz_parts_6r_150p.png\
+    --n_components 150\
+    --patch_radius 6
+
+
+python local/CExtractPatches.py --config conf/main.config -v\
+    --data $train_examples\
+    --data_spec $train_examples_S\
+    --save_parts ${exp_dir_bernoulli}/all_save_parts_2r_50p.npy\
+    --spec_save_parts ${exp_dir_bernoulli}/all_spec_save_parts_2r_50p.npy\
+    --viz_spec_parts ${exp_dir_bernoulli}/all_viz_parts_2r_50p.png\
+    --n_components 50\
+    --patch_radius 2
+
+python local/CExtractPatches.py --config conf/main.config -v\
+    --data $train_examples\
+    --data_spec $train_examples_S\
+    --save_parts ${exp_dir_bernoulli}/all_save_parts_2r_70p.npy\
+    --spec_save_parts ${exp_dir_bernoulli}/all_spec_save_parts_2r_70p.npy\
+    --viz_spec_parts ${exp_dir_bernoulli}/all_viz_parts_2r_70p.png\
+    --n_components 70\
+    --patch_radius 2
+
+python local/CExtractPatches.py --config conf/main.config -v\
+    --data $train_examples\
+    --data_spec $train_examples_S\
+    --save_parts ${exp_dir_bernoulli}/all_save_parts_2r_25p.npy\
+    --spec_save_parts ${exp_dir_bernoulli}/all_spec_save_parts_2r_25p.npy\
+    --viz_spec_parts ${exp_dir_bernoulli}/all_viz_parts_2r_25p.png\
+    --n_components 25\
+    --patch_radius 2
+
+
+python local/CExtractPatches.py --config conf/main.config -v\
+    --data $train_examples\
+    --data_spec $train_examples_S\
+    --save_parts ${exp_dir_bernoulli}/all_save_parts_4r_50p.npy\
+    --spec_save_parts ${exp_dir_bernoulli}/all_spec_save_parts_4r_50p.npy\
+    --viz_spec_parts ${exp_dir_bernoulli}/all_viz_parts_4r_50p.png\
+    --n_components 50\
+    --patch_radius 4
+
+
+python local/CExtractPatches.py --config conf/main.config -v\
+    --data $train_examples\
+    --data_spec $train_examples_S\
+    --save_parts ${exp_dir_bernoulli}/all_save_parts_4r_25p.npy\
+    --spec_save_parts ${exp_dir_bernoulli}/all_spec_save_parts_4r_25p.npy\
+    --viz_spec_parts ${exp_dir_bernoulli}/all_viz_parts_4r_25p.png\
+    --n_components 25\
+    --patch_radius 4
+
+
+
+\end{verbatim}
+
+\section{Looking at the Hard Comparisons}
+
+
+\section{Latent Shift EM for Detection performance}
+Another experiment we are running is to compare detection results where we double the length of the examples used for detection.
+To dod this we construct another config file with a longer time
+\texttt{conf/main\_longer.config}
+which we get via
+\begin{verbatim}
+cat << "EOF" > $conf/main.config
+[SPECTROGRAM]
+sample_rate=16000
+num_window_samples=320
+num_window_step_samples=80
+fft_length=512
+kernel_length=7
+freq_cutoff=3000
+preemphasis=.95
+use_mel=False
+do_mfccs=False
+no_use_dpss=False
+mel_nbands=40
+num_ceps=13
+liftering=.6
+include_energy=False
+include_deltas=False
+include_double_deltas=False
+delta_window=9
+do_freq_smoothing=False
+mel_smoothing_kernel=-1
+
+[SVM]
+example_length=.5
+kernel='linear'
+penalty_list=['unreg', '1.0',
+                                                 'little_reg','0.1',
+                                                 'reg', '0.05',
+                                                 'reg_plus', '0.01',
+                                                 'reg_plus_plus','0.001']
+
+
+[EDGES]
+block_length=40
+spread_length=1
+threshold=.7
+magnitude_block_length=0
+abst_threshold=(0.025,  0.025,  0.015,  0.015,  0.02 ,  0.02 ,  0.02 ,  0.02 )
+magnitude_threshold=.4
+magnitude_spread=1
+magnitude_and_edge_features=False
+magnitude_features=False
+mag_smooth_freq=0
+mag_downsample_freq=0
+auxiliary_data=False
+auxiliary_threshold=.5
+num_mag_channels=10
+num_axiliary_data=3
+save_parts_S=False
+EOF
+
+\end{verbatim}
+so that the features used are half a second in length. The experiment
+to be performed is comparing p versus b so we re extract the
+data
+\begin{verbatim}
+local=local
+conf=conf
+data=data/local/data
+for phn in b p  ; do
+    echo ${phn}
+    for data_set in train dev core_test ; do
+        echo ${data_set}
+
+        $local/sampletrans2frametrans.py -c $conf/main_longer.config\
+            --transcript ${data}/${phn}_${data_set}.trans\
+            > ${data}/${phn}_${data_set}_longer.frame_trans
+
+        $local/extract_data_matrix.py -c $conf/main_longer.config --transcript ${data}/${phn}_${data_set}_longer.frame_trans\
+            --uttids ${data}/${data_set}.uttids\
+            --output ${data}/${phn}_${data_set}_longer_examples.npy\
+            --output_spec ${data}/${phn}_${data_set}_longer_examples_S.npy\
+            --output_info ${data}/${phn}_${data_set}_longer_info.npy
+    done
+done
+
+\end{verbatim}
+and then we train the SVMs to compare these
+\begin{verbatim}
+export PATH=$PATH:/home/mark/Template-Speech-Recognition/Development/051913
+phn1=b
+phn2=p
+data=data/local/data
+datadir=$data
+exp_dir=exp/longer_classify
+mkdir -p $exp_dir
+conf=conf
+CSVMTrain.py --input_data_matrices\
+            $datadir/${phn1}_train_longer_examples.npy\
+            $datadir/${phn2}_train_longer_examples.npy\
+            --input_test_data_matrices\
+            $datadir/${phn1}_dev_longer_examples.npy\
+            $datadir/${phn2}_dev_longer_examples.npy\
+            --input_lengths\
+            $datadir/${phn1}_train.lengths\
+            $datadir/${phn2}_train.lengths\
+            --input_test_lengths\
+            $datadir/${phn1}_dev.lengths\
+            $datadir/${phn2}_dev.lengths\
+            --output_fls_prefix $exp_dir/svm_train_longer_${phn1}_${phn2}\
+            --config $conf/main_longer.config -v
+\end{verbatim}
+one question that we wish to address is how much difference the longer
+or shorter windows really makes on classification performance.
+We use 97 time points for this experiment.
+We have a local script for comparing the sizes of the various
+coefficient filters
+
+
+\section{Collecting terms and training}
+
+The first task is to get the set of keywords and how many there are.
+Since we are working with switchboard, and, in particular, the
+\texttt{swb\_ms98} word transcriptions.  So we build a dictionary of
+the words that maps each word to a transcription.
+We will create a file \texttt{term\_identifiers} which is of the form
+\begin{verbatim}
+<term> <term-id>
+\end{verbatim}
+which will be produced by the script
+\begin{verbatim}
+mkdir -p data/local
+local/extract_words.py -d swb_ms98_transcriptions/sw-ms98-dict.text -o data/local/words.txt
+\end{verbatim}
+and a file \texttt{data/local/words.txt}
+\begin{verbatim}
+<word-id> <word>
+\end{verbatim}
+and then we need to get the counts of these. To do this we first
+compile a list of the word transcript files
+\begin{verbatim}
+cat swb_ms98_transcriptions/*/*/*-word.text | local/collect_word_stats.py -w data/local/words.txt > data/local/words_occurrences_av_durations.txt
+\end{verbatim}
+and then we want to get the top words by occurrence that are
+of short duration
+\begin{verbatim}
+
+\end{verbatim}
+ The counts are computed
+using the script
+\begin{verbatim}
+
+\end{verbatim}
+which will be const
+
+
+Our code is significantly different than from before.  One of the files is \texttt{CExtractInstances.py}
+which has the task of determining where the instances of a phone are within the data. In particular datum $i$ comes as 
+a signal $x_i(n)\in\mathbb{R}$ with $n\in[N_i]=\{0,1,\ldots,N_i-1\}$ paired with a transcript consisting in start times $t_i^{start}(m)\in[N_i]$,
+end times $t_i^{end}(m)\in[N_i]$ and labels $p_i(m)\in [P]$ where $m\in[M_i]$ so that $N_i$ is the number of samples (assumed to 
+uniformly sample a continuous signal) and $M_i$ is the number of labels.  The transcript forms a \textit{segmentation} of
+$[N_i]$ so that $t_i^{start}(m+1)=t_i^{end}(m)$ so that the labels are a division of the samples.  In general $M_i << N_i$.
+
+Our task is to produce a set of start times $\{\hat{t_k}\}_{k=0}^{\hat{K}-1}$ for a query label symbol $p\in[P]$ on an unlabeled
+signal $x$.  The algorithm we use for this task may be trained with a data set $\{(x_i,t_i^{start},t_i^{end},p_i)\}_{i=0}^{I-1}$.  The 
+approach we take is to compute a generalized log-likelihood ratio test $\lambda(n';\Theta_p,\theta_{bgd})$ at each time point
+$t$ so that
+\begin{equation}
+  \lambda(n';x,\Theta_p,\theta_{bgd}) = \max_{\theta\in\Theta_p}\log\frac{\mathbb{P}(x[n-n'];\theta)}{\mathbb{P}(x[n-n'];\theta_{bgd})}
+\end{equation}
+where $\Theta_p$ is a set of models for the signal if the signal label is $p$ (starting at sample $n=0$).
+The curve produced by $\lambda(n'; x,\Theta_p,\theta_{bgd})$ for all values $n'$ is then reduced to a finite set of times $\{\hat{t_k}\}_{k=0}^{\hat{K}-1}$ using a peak-finding algorithm.  We also include an optional peak-clustering step where the peaks are partitioned
+into contiguous time intervals (or clusters).  For scoring purposes we label each peak (or peak cluster) as being a \textit{hit}
+or a \textit{false alarm}.  In the case of peaks we consider the cluster a hit if the peak time is close to a labeled start time
+for the query label $p$. A peak cluster is a hit if the labeled start time occurs within the cluster.  A peak or a peak cluster
+is a false alarm otherwise.  We measure performace with an ROC curve which tracks the \textit{true positive rate}, or the fraction of
+true labeled start times that our detector finds and compares it to the \textit{false positive rate}, or the number of false alarms
+per hour (or other unit of time).
+
+\section{Building the Model}
+
+To build the model we extract all instances within a subset of the data.
+
+\subsection{Extracting the Data}
+
+We use several tools for extracting the data. The first is to just get the list of samples and locations for where the 
+target phone sequence occurs--that task is handled by \texttt{CObjectInstances.py}. It takes as an argument a label sequence, a config file
+(which wil be standard throughout the system), and a two column list of transcript-audio file path pairs. The command is invoked
+\begin{verbatim}
+paste train.phn train.wav | ./CObjectInstances.py \
+    --label_sequence $PHNSEQUENCE  > extracted_instances
+\end{verbatim}
+the output is a text file where each line is given by the following rule:
+\begin{verbatim}
+<file-path> <object-start-sample> <object-end-sample> \
+    (| <object-start-sample> <object-end-sample>)*
+\end{verbatim}
+so that we can have multiple instances.  However, for performing model inference and such we want to also extract some object context
+since we wish to estimate the detection thresholds that will be used to find objects.
+
+From here we could just extract the objects exactly at
+their labeled samples.  This approach is deficient, however,
+because of the way we estimate our statistical models and the
+way we perform detection because the detector will not generally
+fire exactly at the labeled start time for the object.  Thus
+associated with the object $i$ start sample, $t_i^{start}$, is a detection
+radius $r_i^{detect}$ so that a detection firing at a sample
+$t$ with $|t-t_i^{start}|<r_i^{detect}$ is considered a \textit{hit}.
+In order to estimate the behavior of a particular detection
+algorthm
+we want to extract some context around the object, so that
+we can compute the detectition statistics $\Lambda(t)$ at least
+for all times in $B(t_i^{start},r_i^{detect})$.  Moreover,
+our detector works as a sliding-window of fixed size
+(or potentially multiple such windows in parallel) where the size
+of the sliding window is chosen in a data-driven manner so the
+estimated sliding-window might be longer than the object we are
+testing against so we want to be sure to extract enough surrounding
+context of the object that we can test a sliding window of any
+potential length against any object.  The only bound we have
+on the length of the detection window is the length of the
+labeled examples $l_{\max}$.  The minimal segment of features
+that we want to extract will then be
+$$[t_i^{start}-r_i^{detect},t_i^{start}+r_i^{detect}+l_{\max}]$$
+and we can get $l_{\max}$ from the \texttt{object\_instances} file,
+but we also need to know $r_i^{detect}$, which we just set to be
+$l_i/3$ where $l_i$ is the object length.
+
+Different options could be set for these things and we are
+attempting to write code so that way these are handled elegantly
+and quickly.  These options are handled in main.config:
+\begin{verbatim}
+[DETECTION]
+adaptive_window=True
+window_radius=.3
+\end{verbatim}
+where this indicates that the radius of the window is to be $r_i=.3\cdot l_i$
+where $l_i$ is the length of the example.  A window with that radius will have
+length $2*r_i+1$.
+If we were to use the same radius $r$ for each window on each example the config
+file would have
+\begin{verbatim}
+[DETECTION]
+adaptive_window=False
+window_radius=10
+\end{verbatim}
+to indicate that we want a fixed window radius around all of the
+examples.  The tool we use is \begin{verbatim}
+CObjectContextSegments.py\end{verbatim}
+and we run the command 
+\begin{verbatim}
+./CObjectContextSegments.py -f object_instances -c main.config > context_object_instances
+\end{verbatim}
+
+The format of \texttt{context\_object\_instances} is
+\begin{verbatim}
+<file-path> <object-context-times> ( | <object-context-times>)* ...
+\end{verbatim}
+where
+\begin{verbatim}
+<object-context-times> = <context-start> <context-end> <object-start> <object-end>
+\end{verbatim}
+indicates where the object is and what context to extract. We then
+construct a file that parses this along with the configuration
+file to produce a data set.
+
+In the next step we actually extract the training data. The command
+we use is \texttt{CExtractObjectContext.py} it takes the file
+\texttt{context\_object\_instances} as input as well as
+an argument to decide what to name the output files, an argument
+to determine whether to save the waveforms, and a path to a config
+file which determines the parameters for computing the Fourier
+transform with the file.  The command is run
+\begin{verbatim}
+./CExtractObjectContext.py -f context_object_instances -o out --do_wave_output -c main.config
+\end{verbatim}
+and then we can listen to the output and see the pictures of
+the output as well.
+\begin{verbatim}
+
+\end{verbatim}
+
+  The output files from that command
+run are
+\begin{verbatim}
+out_X.npy   # the binary edge features for the training examples
+out_S.npy   # spectrogram features for the training examples
+out_W.npy   # concatenated waveforms
+out_meta.txt  # text file containing when things happen
+out_bgd_E.npy # the background data file
+\end{verbatim}
+The next file to be run is the actual training of the data models:
+\begin{verbatim}
+./CTrainTemplates.py -f out -o orig -c main.config
+\end{verbatim}
+where the \texttt{-f out} flag indicates the file prefices for the
+data that will be used to estimate the templates, 
+\texttt{-o orig} is the prefix for the output files,
+and \texttt{-c main.config} is for the configuration file.  The 
+structure of this file is
+\begin{enumerate}
+\item Load in data
+\item Manipulate edge feature data to prepare for the Bernoulli EM algorithm
+\item Perform the Bernoulli estimation
+\item Extract the template visualizations
+\item Estimate the detection thresholds for all the examples.
+\end{enumerate}
+The output, specifically, that we need  is a matrix containing
+the linear-filters, constant terms, and detection thresholds.  
+
+
+The step after that is to estimate the model, once that has been
+estimated we can then perform the cascaded training and ultimately
+do the detection experiment.
+
+ this is an intermediate step before   Doing so allows for straightforward testing with templates of any given length.
+
+\section{Bernoulli Template Clustering}
+
+For this portion we begin constructing things that are going to
+be specific to the experiment under consideration
+so we create a dictionary to store these files
+\begin{verbatim}
+mkdir -p exp/model
+\end{verbatim}
+
+The command for getting the templates estimated is
+\begin{verbatim}
+CTrainTemplates.py -f out -o exp/model/templates -c main.config -v
+\end{verbatim}
+and these are some example templates trained. The output is
+the files
+\begin{verbatim}
+templates_constants.npy
+templates_E_filters.npy
+templates_affinities.npy
+templates_E_templates.npy
+templates_S_templates.npy
+\end{verbatim}
+  The algorithm is simple and just uses
+EM to estimate the templates.  The next step is to get the set of filters, which need not all the 
+the same length.  The code for constructing the filters is
+based on the log-likelihood ratio test.
+
+
+\section{Patchwork of Parts Model}
+
+To make the problem easier we are going to first cluster the templates using the standard Bernoulli methods
+and get the affinities.
+
+
+\section{Running the Recognizer}
+
+
+
+There are a couple of components to this. The first is to generate and template score series for each of the data files, these data
+series will be stored in \texttt{exp/train}. We generate them
+using the command
+\begin{verbatim}
+mkdir -p exp/loglike_ratio
+CTemplateScore.py -d train.wav -c main.config -t exp/model/templates -o exp/loglike_ratio
+\end{verbatim}
+and then this will output the score files.
+Those files are saved in 
+\begin{verbatim}
+exp/loglike_ratio/scores_meta.npy
+exp/loglike_ratio/scores.npy
+exp/loglike_ratio/labels_meta.npy
+exp/loglike_ratio/labels.npy
+exp/loglike_ratio/utt_ids
+\end{verbatim}
+where \texttt{scores\_meta.npy} is a two-dimensional array
+where each row corresponds to a score series
+stacked together in \texttt{scores.npy}, the first entry of the row
+is the utterance id in \texttt{utt\_ids}, the second entry
+is the mixture component, and the third entry is the number
+of frames.  The labels indicate where the keyword occurs.
+
+\section{Inferring Detection Thresholds and Base Detections}
+
+We consider two types of thresholds here. One is the correction
+that is done on the scores for off-object this allows us to do
+an FDR-style detection procedure for the true positives
+in the time series.
+
+\subsection{Likelihood Ratio Test Statistic Distribution Estimation}
+
+The first step is to figure out how the likelihood ratio test
+statistic is distributed on the data. And we do this with
+\texttt{CGetLRTMeanVar.py}
+and we run it with
+\begin{verbatim}
+CGetLRTMeanVar.py -i exp/loglike_ratio -m exp/model -c main.config
+\end{verbatim}
+which gets us the mean values and standard deviations on the performance of the
+detector on those data.  These can provide a diagnostic to show
+that a certain component should not be used. 
+
+\subsection{Detection Threshold}
+
+We first infer the detection threshold that will be used. Detections will correspond to local maxima
+of the detector, which may be seen from the detector sequence.  To get these we need
+to get the scores and use the meta of the scores to get a detection sequence.  Namely,
+we designate a score as a maximum if it is a maximum over all detectors as well as within a small
+interval of time.
+\begin{verbatim}
+CGetDetectThresholds.py -i exp/loglike_ratio -m exp/model -c main.config
+\end{verbatim}
+the input that this file requires is
+\begin{verbatim}
+exp/loglike_ratio/scores.npy
+exp/loglike_ratio/scores_meta.npy
+exp/loglike_ratio/labels.npy
+exp/model/templates_E_filters_midpoints.npy
+\end{verbatim}
+and then we save the results
+\begin{verbatim}
+exp/loglike_ratio/train_detection_scores.npy
+exp/loglike_ratio/train_detection_meta.npy
+exp/loglike_ratio/train_hit_scores.npy
+exp/loglike_ratio/train_hit_meta.npy
+\end{verbatim}
+and additionally we get the hits and false alarms
+arranged by which component detected them
+
+and these are were the detections are saved.  We also create a file for performing the clustering
+of these detection scores.
+
+\section{Training SVMS}
+
+The SVM
+
+
+\section{Get Detections}
+
+Detections are defined as local maxima that exceed the detection
+threshold.
+\begin{verbatim}
+CGetDetections.py -i exp/loglike_ratio
+\end{verbatim}
+
+
+\section{Detection Clustering}
+
+We now turn the series into clusters.  We use the procedure
+in ``Lattice Indexing for Spoken Term Detection''
+and we cluster the detections based on end time.
+\begin{verbatim}
+CClusterDetections.py -i exp/loglike_ratio -m exp/model
+\end{verbatim}
+based on the paper the steps are as follows:
+\begin{enumerate}
+\item sort the collected (start, end) times pairs with respect to end times
+\item identify the largest set of non-overlapping set of (start, end) times and assign them as cluster heads
+\item classify the rest of the pairs according to maximal overlap
+\end{enumerate}
+We observe that a greedy solution works for the second problem.  Namely
+we begin with the first element of the list and then we
+
+To run this algorithm we need to compute the overlap between two
+intervals
+the proposed function is
+\begin{equation}
+  overlap((a,b),(c,d)) = \{\min\{b,d\} - \max\{a,c\}\}_+
+\end{equation}
+since this is only non-zero iff $c<b$ and $a<d$ (as the two other
+inequalities are trivially implied by the intervals), which is a 
+sufficient condition for overlap.  If they are overlapping then
+the intersection between them will be an interval and the end
+point of that intersection will be the minimum of the two ends
+and the start will be the maximum of the two starts, which gives
+us the formula.
+
+The main statistics that we care about in these clusters is the extent of the cluster, the start time and identity of the detection with the largest score (representative mean of the cluster).  That
+detection will be the representative cluster that we actually
+output and use for scoring.
+
+\section{Setting up the cascade}
+
+In this section rather than just considering the clusterings
+\begin{verbatim}
+./CGetPosNeg.py -i exp/loglike_ratio -m exp/model
+\end{verbatim}
+
+
+
+\section{Evaluation}
+
+The standard for evaluation is that a system is output is judged
+as correct if the midpoint of the system output occurrence is 
+less than or equal to 0.5 seconds from the time span of a known
+occurrence of the search.  There is also the constraint a detection
+can be counted only for a single example and that an example only one detection can be counted as correct otherwise its a miss.
+
+
+\section{Detection Thresholds for ROC estimation}
+
+The next step is to find, for each positive training example,
+the largest 
+
+The algorithm is conducted in stages. We find all positive
+locations and we look within the 
+detection window for maximal score within those locations.  
+
+\section{Unsupervised template learning}
+
+We consider the general topic of Unsupervised template learning. First we consider an extension of the CSSR approach as given in
+\cite{shalizi04}.  Our setting is that we have Bernoulli vectors computed from several utterances for a single speaker. The code
+for this is given in \texttt{timit\_template\_learn\_data\_prep.sh} which shows that this is a TIMIT-focused experiment. Eventually
+I will test this on switchboard, etc.
+
+Just for the sake of simplicity I am going to work with a single female TIMIT speaker to get the ball rolling on this thing. First thing
+to do is to extract the features.  The choice of speaker is \texttt{fcjf0} whose utterances are in \texttt{train/dr1} the utterances are:
+\begin{verbatim}
+sa1.wav
+sa2.wav
+si1027.wav
+si1657.wav
+si648.wav
+sx127.wav
+sx217.wav
+sx307.wav
+sx37.wav
+sx397.wav
+\end{verbatim}
+
+I shall construct a script that converts these all into a single matrix (that will be divided to get training and development subsets).
+I will begin with the HTK feature extraction followed by my own.  I want to have the style of script be similar to what I saw in the 
+Kaldi framework, and everything is done with shell commands which have been:
+\begin{verbatim}
+./timit_template_learn_data_prep.sh
+WORKDIR=/home/mark/Research/Sufficiency/TemplateLearning/work
+SCRIPTDIR=/home/mark/Research/Sufficiency/TemplateLearning/bin
+PATH=$PATH:$HTK/HTKTools:$SCRIPTDIR
+DATA=$WORKDIR/data
+export PATH
+for ml in 1 2 3 4 5 6 7 ; do
+CClusterFeatures.py -c $WORKDIR/main.config -t $DATA/speaker_E_train.npy -d $DATA/speaker_E_dev.npy -l $ml -o $WORKDIR/model${ml}.npz --num_mix_set 1 2 4 6 8 16 32 64 128 -ts $DATA/speaker_S_train.npy
+done
+\end{verbatim}
+
+The data portion of the program is summarized in \texttt{\$DATA/speaker\_meta.txt}
+which indicates that five utterances were used for the training
+data:
+\begin{verbatim}
+sa1.wav
+sa2.wav
+si1027.wav
+si1657.wav
+si648.wav
+\end{verbatim}
+and there were a total of 2905 frames of data included.  I used
+Bernoulli mixture clustering 
+\begin{verbatim}
+template_speech_rec.bernoulli_mixture
+\end{verbatim}
+on the individual frames.  The next step is to estimate
+\begin{equation}
+  \hat{\mathbb{P}}(S_t\mid S_{t-1}, X_0^{T-1})
+\end{equation}
+where $S_t$ is the latent variable associated with an observation $X_t$.
+The length one model is just a set of models and weights $\{(T_1^i,w_1^i)\}_{i=1}^{k_1}$
+and thus we can compute a vector $A_t^i$ which are the normalized likelihoods of
+$X_t$ under model $T_1^i$ weighted by $w_1^i$:
+\begin{equation}
+  A_t^i = \frac{w_1^i\mathbb{P}_{T_1^i}(X_t)}{\sum_{j=1}^{k_1}w_1^j\mathbb{P}_{T_1^j}(X_t)}
+\end{equation}
+so then we have
+\begin{equation}
+  \begin{array}{rcl}
+  \hat{\mathbb{P}}(S_t\mid S_{t-1}) &=& \frac{\mathbb{P}(S_t, S_{t-1})}{\mathbb{P}(S_{t-1})}\\
+  &=& \frac{\sum_{t=1}^{T-1} A_t^i A_{t-1}^j}{\sum_{t=1}^{T-1}A_{t-1}^j}
+  \end{array}
+\end{equation}
+There is some subtlety to this, however, since there is a margin: i.e. points that don't havea complete history on either side. So we need to be really careful about defining these things.  We assume that
+we have observations $\{x_0^{T-1}\}$ so that means the history ranges
+over $\{x_0^{T-2}\}$ and the future ranges over $\{x_1^{T-1}\}$. Really
+what we have here is a matrix $W_{ij}^1$ which maps a state $j$
+to a state $i$.  Thus an important thing to use here are the
+affinities.  Thus we are in a similar situation to the standard
+HMM baum-welch algorithm. Next we want to distinguish
+sequences and do comparison for different length-clusterings.
+In particular we also have clusters for pairs of observations
+$(X_t,X_{t-1})$ and we need to know whether a pair has a different 
+predictive future distribution than an independent pair of
+observations.  There is some kind of multiple-testing difficulty
+that we encounter inherently by doing this and some kind of
+false-discovery rate or whatever.
+
+In any case the affinities are the main thing being used to get
+these predictions.  Before I continue I want to actually show
+what the data has produced. An interesting question is whether
+we are picking up any kind of differences between the different
+vowels and consonants and what not with this kind of clustering.
+
+ I do this by running the command
+\begin{verbatim}
+PLOTS=$WORKDIR/plots
+mkdir -p $PLOTS
+CViewModel -f $WORKDIR/model1.npz -g $PLOTS/model1
+\end{verbatim}
+ can associated with each $X_t$ 
+
+
+\end{document}
