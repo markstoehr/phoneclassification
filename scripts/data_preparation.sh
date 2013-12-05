@@ -26,11 +26,11 @@ mkdir -p $out_dir
 
 dsets="train dev core_test"
 
-out_train_dir=$out_dir/$dset
+out_train_dir=$out_dir/train
 mkdir -p $out_train_dir
-out_dev_dir=$out_dir/$dset
+out_dev_dir=$out_dir/dev
 mkdir -p $out_dev_dir
-out_core_test_dir=$out_dir/$dset
+out_core_test_dir=$out_dir/core_test
 mkdir -p $out_core_test_dir
 
 
@@ -43,8 +43,11 @@ cat $dir/train_wav.scp | sed 's/wav/phn/'> $dir/train_phn.scp
 echo '#!/bin/bash' > $dir/convert_train_wav.scp
 sed "s:^:"$out_train_dir"/:" < $dir/train_wav.scp | sed "s: :.wav :" |awk '{printf("'$sph2pipe' -f wav %s %s\n", $2,$1);}' >> $dir/convert_train_wav.scp
 
-awk '{print $NF}' $dir/train_wav.scp > $dir/train.wav
+source $dir/convert_train_wav.scp
+
+awk '{ if (NF > 1) { print $NF }}' $dir/convert_train_wav.scp > $dir/train.wav
 awk '{print $2}' $dir/train_phn.scp > $dir/train.phn
+
 
 
 
@@ -134,22 +137,36 @@ EOF
 
 
 TestDir=$TIMIT/test
-find -L $TestDir \( -iname 's[ix]*.WAV' -o -iname 's[ix]*.wav' \) > test.flst
-$local/flist_to_scp.py < test.flst | sort > test_wav.scp
-cat test_wav.scp | awk '{print $1}' > test.uttids
-cat test_wav.scp | sed 's/wav/phn/'> test_phn.scp
-awk '{print $2}' test_wav.scp > test.wav
-awk '{print $2}' test_phn.scp > test.phn
+find -L $TestDir \( -iname 's[ix]*.WAV' -o -iname 's[ix]*.wav' \) > $dir/test.flst
+python $local/flist_to_scp.py < $dir/test.flst | sort > $dir/test_wav.scp
+cat $dir/test_wav.scp | awk '{print $1}' > $dir/test.uttids
+cat $dir/test_wav.scp | sed 's/wav/phn/'> $dir/test_phn.scp
 
-$local/extract_by_spk.py -i test_wav.scp --spk $conf/dev_spk > dev_wav.scp
-$local/extract_by_spk.py -i test_wav.scp --spk $conf/core_test_spk > core_test_wav.scp
-$local/extract_by_spk.py -i test_phn.scp --spk $conf/dev_spk > dev_phn.scp
-$local/extract_by_spk.py -i test_phn.scp --spk $conf/core_test_spk > core_test_phn.scp
+python $local/extract_by_spk.py -i $dir/test_wav.scp --spk $conf/dev_spk > $dir/dev_wav.scp
+python $local/extract_by_spk.py -i $dir/test_wav.scp --spk $conf/core_test_spk > $dir/core_test_wav.scp
+python $local/extract_by_spk.py -i $dir/test_phn.scp --spk $conf/dev_spk > $dir/dev_phn.scp
+python $local/extract_by_spk.py -i $dir/test_phn.scp --spk $conf/core_test_spk > $dir/core_test_phn.scp
 
-awk '{print $1}' dev_wav.scp > dev.uttids
-awk '{print $1}' core_test_wav.scp > core_test.uttids
+awk '{print $1}' $dir/dev_wav.scp > $dir/dev.uttids
+awk '{print $1}' $dir/core_test_wav.scp > $dir/core_test.uttids
 
-awk '{print $2}' dev_wav.scp > dev.wav
-awk '{print $2}' dev_phn.scp > dev.phn
-awk '{print $2}' core_test_wav.scp > core_test.wav
-awk '{print $2}' core_test_phn.scp > core_test.phn
+awk '{print $2}' $dir/dev_phn.scp > $dir/dev.phn
+awk '{print $2}' $dir/core_test_phn.scp > $dir/core_test.phn
+
+echo '#!/bin/bash' > $dir/convert_dev_wav.scp
+sed "s:^:"$out_dev_dir"/:" < $dir/dev_wav.scp | sed "s: :.wav :" |awk '{printf("'$sph2pipe' -f wav %s %s\n", $2,$1);}' >> $dir/convert_dev_wav.scp
+
+echo '#!/bin/bash' > $dir/convert_core_test_wav.scp
+sed "s:^:"$out_core_test_dir"/:" < $dir/core_test_wav.scp | sed "s: :.wav :" |awk '{printf("'$sph2pipe' -f wav %s %s\n", $2,$1);}' >> $dir/convert_core_test_wav.scp
+
+
+source $dir/convert_dev_wav.scp
+source $dir/convert_core_test_wav.scp
+
+
+echo Train wav files are in $out_train_dir
+echo Dev wav files are in $out_dev_dir
+echo Core Test wav files are in $out_core_test_dir
+
+awk '{ if (NF > 1){ print $NF}}' $dir/convert_dev_wav.scp > $dir/dev.wav
+awk '{ if (NF > 1){ print $NF}}' $dir/convert_core_test_wav.scp > $dir/core_test.wav
