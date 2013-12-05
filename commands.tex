@@ -895,6 +895,11 @@ a 58\% accuracy using the edges on the training data and a
 54\% accuracy using the edges on the testing data. This indicates
 that the two data sets are actually very similar.
 
+\subsection{Visualizing Decision components}
+
+We now undertake the task fo understanding how the different spatial
+locations contribute to the final decision.
+
 \subsection{Combining the SVM with Bernoulli mixtures}
 However, one statistic that we take note of is that most
 of the true labels appear in the top few predicted labels. 
@@ -1263,6 +1268,117 @@ python local/CExtractPatches.py --config conf/main.config -v\
 
 
 \end{verbatim}
+and then we have code for visualizing the patchs
+\begin{verbatim}
+exp_dir_bernoulli=exp/bernoulli_all_phones
+echo -e "4 70
+6 150
+2 50
+2 70
+2 25
+4 50
+4 25" > ${exp_dir_bernoulli}/part_params 
+
+cat ${exp_dir_bernoulli}/part_params | while read line ; do
+  radius=`echo $line | awk '{ print $1 }'`
+  nparts=`echo $line | awk '{ print $2 }'`
+
+  python local/CVizParts.py --edge_means ${exp_dir_bernoulli}/all_save_parts_${radius}r_${nparts}p.npy \
+    --spec_means ${exp_dir_bernoulli}/all_spec_save_parts_${radius}r_${nparts}p.npy\
+    --viz_save_prefix ${exp_dir_bernoulli}/spec_edges_orientation_viz_${radius}r_${nparts}p
+
+done
+
+
+mkdir -p ${exp_dir_bernoulli}/part_utt_images
+# view the parts imposed on an utterance
+cat ${exp_dir_bernoulli}/part_params | while read line ; do
+  radius=`echo $line | awk '{ print $1 }'`
+  nparts=`echo $line | awk '{ print $2 }'`
+
+  python local/CVizPartsUtterance.py  -c conf/main.config \
+    --wavfile sa1.wav\
+    --part_edge_means ${exp_dir_bernoulli}/all_save_parts_${radius}r_${nparts}p.npy \
+    --spec_means ${exp_dir_bernoulli}/all_spec_save_parts_${radius}r_${nparts}p.npy\
+    --viz_save_prefix ${exp_dir_bernoulli}/part_utt_images/parts_sa1_wav_viz_${radius}r_${nparts}p
+
+done
+
+
+
+\end{verbatim}
+the next step is then to test the performance
+of these algorithms on an actual dataset. So we then begin
+the comparison
+
+\begin{verbatim}
+# make new data matrices from the parts
+exp_dir_bernoulli=exp/bernoulli_all_phones
+exp_dir=exp/bernoulli_all_phones_parts
+mkdir -p $exp_dir
+data=data/local/data
+error_list=${exp_dir}/error_list
+rm -f $error_list
+touch $error_list
+
+cat ${exp_dir_bernoulli}/part_params | while read line ; do
+radius=`echo $line | awk '{ print $1 }'`
+nparts=`echo $line | awk '{ print $2 }'`
+
+# train the models using the training data
+dev_examples=""
+templates=""
+for phn in `cat ${data}/phone.list` ; do
+   echo phn=${phn}
+   python local/CGetParts.py --data ${data}/${phn}_train_examples.npy\
+      --parts ${exp_dir_bernoulli}/all_save_parts_${radius}r_${nparts}p.npy\
+      --out ${exp_dir}/${phn}_train_examples_parts.npy
+
+   python local/CGetParts.py --data ${data}/${phn}_dev_examples.npy\
+      --parts ${exp_dir_bernoulli}/all_save_parts_${radius}r_${nparts}p.npy\
+      --out ${exp_dir}/${phn}_dev_examples_parts.npy
+
+
+   python local/CBernoulliMMTrain.py --config conf/main.config \
+      --input_data_matrix ${exp_dir}/${phn}_train_examples_parts.npy \
+      --templates ${exp_dir}/${phn}_templates.npy \
+      --weights ${exp_dir}/${phn}_weights.npy \
+      --underlying_data ${data}/${phn}_train_examples_S.npy \
+      --spec_templates ${exp_dir}/${phn}_S_templates.npy \
+      --viz_spec_templates ${exp_dir}/${phn}_S_templates -v
+
+   dev_examples="$dev_examples ${exp_dir}/${phn}_dev_examples_parts.npy"
+   templates="$templates ${exp_dir}/${phn}_templates.npy"
+
+
+done
+
+phn_ids_fl=${exp_dir}/phn_ids
+awk '{ print NR, $1}' ${data}/phone.list > $phn_ids_fl
+
+# test the models
+python local/CTestBernoulli.py --phn_ids $phn_ids_fl --data $dev_examples --templates $templates\
+    --out_scores ${exp_dir}/bernoulli_dev_scores.npy\
+    --out_labels ${exp_dir}/bernoulli_dev_labels.npy\
+    --out_components ${exp_dir}/bernoulli_dev_components.npy\
+    --out_top_predicted_labels ${exp_dir}/bernoulli_dev_top_predicted_labels.npy\
+    --out_top_predicted_components ${exp_dir}/bernoulli_dev_top_predicted_components.npy\
+    --leehon_mapping conf/phones.48-39\
+    --out_confusion_matrix ${exp_dir}/bernoulli_confusion48_dev_${radius}r_${nparts}p.npy\
+    --out_leehon_confusion_matrix ${exp_dir}/bernoulli_confusion39_dev_${radius}r_${nparts}p.npy
+
+error_rate=`python local/print_confusion_matrix_error_rate.py ${exp_dir}/bernoulli_confusion39_dev_${radius}r_${nparts}p.npy`
+
+echo "radius=${radius} nparts=${nparts} error_rate=$error_rate" >> $error_list
+done
+\end{verbatim}
+
+and then we can visualize these parts on an example sentence
+
+
+
+then we want to understand how the different parts interact with
+the data, namely does the part coding capture what we expect?
 
 \section{Looking at the Hard Comparisons}
 
