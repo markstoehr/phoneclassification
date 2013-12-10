@@ -1502,7 +1502,58 @@ python local/CTestBernoulli.py --phn_ids $phn_ids_fl --data $dev_examples --temp
 
 \end{verbatim}
 
+\section{Testing the raw spectrogram}
+
+We now run a test on the raw spectrogram
+
+\begin{verbatim}
+exp=exp/spectrogram_exp
+data=data/local/data
+mkdir -p $exp
+
+LIBLINEAR=/home/mark/Software/liblinear-1.93
+
+
+# compute the train files
+rm -f $exp/train_fls
+rm -f $exp/dev_fls
+rm -f $exp/test_fls
+rm -f $exp/phns2ids
+phn_id=1
+for phn in `cat $data/phone.list` ; do
+  echo $phn $phn_id
+  echo "$phn $data/${phn}_train_examples_S.npy" >> $exp/train_fls
+  echo "$phn $data/${phn}_dev_examples_S.npy" >> $exp/dev_fls
+  echo "$phn $data/${phn}_core_test_examples_S.npy" >> $exp/test_fls
+  echo "$phn $phn_id" >> $exp/phns2ids
+  phn_id=$(( $phn_id + 1))
+done
+
+
+python local/convert_kernel_mat_to_data.py --data_files $exp/train_fls\
+    --ftype npy --out_fl $exp/train.txt --phns2ids $exp/phns2ids
+
+python local/convert_kernel_mat_to_data.py --data_files $exp/dev_fls\
+    --ftype npy --out_fl $exp/dev.txt --phns2ids $exp/phns2ids
+
+python local/convert_kernel_mat_to_data.py --data_files $exp/test_fls\
+    --ftype npy --out_fl $exp/test.txt --phns2ids $exp/phns2ids
+
+
+
+for C_exp in `seq -10 1 -3` ; do
+   C=`echo "" | awk "END { print (5.0)^($C_exp) }"`
+    echo $C $C_exp
+    $LIBLINEAR/train -s 1 -e 0.0001 -c $C $exp/train.txt $exp/train_model_1_0.0001_${C_exp} -B 1
+    $LIBLINEAR/train -s 2 -e 0.0001 -c $C $exp/train.txt $exp/train_model_2_0.0001_${C_exp} -B 1
+
+done
+
+# compute the errors in a form that can be compared
+\end{verbatim}
+
 \section{Looking at the Hard Comparisons}
+
 
 
 \section{Latent Shift EM for Detection performance}
