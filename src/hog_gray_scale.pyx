@@ -7,13 +7,14 @@ cdef extern from "math.h":
     double fabs(double i)
     double floor(double i)
 
-cpdef hog(im, int sbin = 8): 
+cpdef hog(im, int sbin = 8):
     """
     Computes a histogram of oriented gradient features.
 
     Adopted from Pedro Felzenszwalb's features.cc
     """
-    cdef np.ndarray[np.double_t, ndim=3] data, feat
+    cdef np.ndarray[np.double_t, ndim=2] data
+    cdef np.ndarray[np.double_t, ndim=3] feat
     cdef np.ndarray[np.double_t, ndim=1] hist, norm
 
     cdef int blocks0, blocks1
@@ -32,10 +33,10 @@ cpdef hog(im, int sbin = 8):
     cdef int p
 
     cdef np.ndarray[np.double_t, ndim=1] uu
-    uu = np.array([ 1.0000,  0.9397,  0.7660,  0.500,  0.1736, 
+    uu = np.array([ 1.0000,  0.9397,  0.7660,  0.500,  0.1736,
                    -0.1736, -0.5000, -0.7660, -0.9397])
     cdef np.ndarray[np.double_t, ndim=1] vv
-    vv = np.array([0.0000, 0.3420, 0.6428, 0.8660, 0.9848, 
+    vv = np.array([0.0000, 0.3420, 0.6428, 0.8660, 0.9848,
                    0.9848, 0.8660, 0.6428, 0.3420])
 
     cdef double eps = 0.0001 # to avoid division by 0
@@ -44,7 +45,7 @@ cpdef hog(im, int sbin = 8):
     cdef int dstptr, srcptr
 
     height, width = im.shape[:2]
-    blocks0 = height // sbin 
+    blocks0 = height // sbin
     blocks1 = width // sbin
 
     out0 = blocks0 - 2
@@ -77,7 +78,7 @@ cpdef hog(im, int sbin = 8):
                     best_o = o
 
             # add to 4 histograms around pixel using linear interpolation
-            xp = (<double>(x) + 0.5) / <double>(sbin) - 0.5 
+            xp = (<double>(x) + 0.5) / <double>(sbin) - 0.5
             yp = (<double>(y) + 0.5) / <double>(sbin) - 0.5
 
             ixp = <int>floor(xp)
@@ -97,18 +98,19 @@ cpdef hog(im, int sbin = 8):
                 hist[ixp * blocks0 + (iyp + 1) + best_o*blocks0*blocks1] += vx1 * vy0 * v
             if ixp + 1 < blocks1 and iyp + 1 < blocks0:
                 hist[(ixp + 1) * blocks0 + (iyp + 1) + best_o * blocks0 * blocks1] += vx0 * vy0 * v
-    
+
+
     # compute energy in each block by summing over orientations
     for o from 0 <= o < 9:
         for q from 0 <= q < blocks0 * blocks1:
-            norm[q] += hist[o * blocks0 * blocks1 + q] * hist[o * blocks0 * blocks1 + q] 
+            norm[q] += hist[o * blocks0 * blocks1 + q] * hist[o * blocks0 * blocks1 + q]
 
-    # compute normalized values 
+    # compute normalized values
     for x from 0 <= x < out1:
         for y from 0 <= y < out0:
             p = (x+1) * blocks0 + y + 1
             n1 = 1.0 / sqrt(norm[p] + norm[p+1] + norm[p+blocks0] + norm[p+blocks0+1] + eps)
-            p = (x+1) * blocks0 + y 
+            p = (x+1) * blocks0 + y
             n2 = 1.0 / sqrt(norm[p] + norm[p+1] + norm[p+blocks0] + norm[p+blocks0+1] + eps)
             p = x * blocks0 + y + 1
             n3 = 1.0 / sqrt(norm[p] + norm[p+1] + norm[p+blocks0] + norm[p+blocks0+1] + eps)
@@ -151,7 +153,7 @@ cpdef hog(im, int sbin = 8):
             feat[y, x, 11] = 0.2357 * t3
             dstptr += out0 * out1
             feat[y, x, 12] = 0.2357 * t4
-    
+
     return feat
 
 cpdef hogpad(np.ndarray[np.double_t, ndim=3] hog):
