@@ -18,6 +18,7 @@ def main(args):
     phns2ids = dict(tuple( l.split() for l in open(args.phns2ids,'r').read().strip().split('\n')))
     for fl_id, fl in enumerate(open(args.data_files,'r')):
         label, fname = fl.strip().split()
+        print label, fname
         phn_id = phns2ids[label]
 
         if args.ftype == 'ascii':
