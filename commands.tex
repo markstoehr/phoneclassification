@@ -1371,6 +1371,16 @@ error_rate=`python local/print_confusion_matrix_error_rate.py ${exp_dir}/bernoul
 
 echo "radius=${radius} nparts=${nparts} error_rate=$error_rate" >> $error_list
 done
+
+cat $error_list | while read line ; do 
+    echo $line
+    radius=`echo $line | sed 's:=: :g' | awk  '{ print $2 }'`
+    nparts=`echo $line | sed 's:=: :g' | awk  '{ print $4 }'`
+    error_rate=`echo $line | sed 's:=: :g' | awk  '{ print $6 }'`
+    echo $error_rate > ${exp_dir}/bernoulli_parts_error_rate_${radius}r_${nparts}p.txt
+done
+
+
 \end{verbatim}
 
 and then we can visualize these parts on an example sentence
@@ -1437,6 +1447,8 @@ python local/CTestBernoulli.py --phn_ids $phn_ids_fl --data $dev_examples --temp
     --out_leehon_confusion_matrix ${exp}/bernoulli_confusion39_dev.npy
 
 error_rate=`python local/print_confusion_matrix_error_rate.py ${exp_dir}/bernoulli_confusion39_dev.npy`
+echo $error_rate > $exp/error_rate
+
 \end{verbatim}
 
 \section{Computing Multiscale Edges and concatenating into a binary feature vector}
@@ -1498,7 +1510,7 @@ python local/CTestBernoulli.py --phn_ids $phn_ids_fl --data $dev_examples --temp
     --out_confusion_matrix ${exp}/bernoulli_confusion48_dev.npy\
     --out_leehon_confusion_matrix ${exp}/bernoulli_confusion39_dev.npy
 
-
+python local/print_confusion_matrix_error_rate.py ${exp}/bernoulli_confusion39_dev.npy
 
 \end{verbatim}
 
@@ -1547,6 +1559,23 @@ for C_exp in `seq -10 1 -3` ; do
     $LIBLINEAR/train -s 1 -e 0.0001 -c $C $exp/train.txt $exp/train_model_1_0.0001_${C_exp} -B 1
     $LIBLINEAR/train -s 2 -e 0.0001 -c $C $exp/train.txt $exp/train_model_2_0.0001_${C_exp} -B 1
 
+done
+
+ls $exp/*model* | sed 's:train_model: :' | awk '{ print $2 }' > $exp/model_params
+
+for param_set in `cat $exp/model_params` ; do
+    /home/mark/Software/liblinear-1.93/predict $exp/dev.txt $exp/train_model${param_set}  $exp/dev_out${param_set}
+done
+
+conf=`pwd`/conf
+sort $conf/phones.48-39 | awk '{ print $1, NR }' > $exp/phns2ids
+
+for param_set in `cat $exp/model_params` ; do
+    python local/score_liblinear_predict_fl.py --phns2ids $exp/phns2ids\
+   --leehon_mapping $conf/phones.48-39\
+   --predicted_labels $exp/dev_out${param_set}\
+   --true_labels $exp/dev.txt >  $exp/dev_accuracy${param_set}
+   echo ${param_set} `head $exp/dev_accuracy${param_set}`
 done
 
 # compute the errors in a form that can be compared
