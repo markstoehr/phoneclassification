@@ -111,4 +111,36 @@ We also ran a number of experiments investigating whether the SVM could be incor
 but no combination surpassed the resuls obtained with the
 SVM result.
 
+\section{Comparison of Different Methods}
+
+\begin{table}[h]
+  \centering
+  \begin{tabular}{| c | c | c |}
+    \hline
+     Classifier & Features & Accuracy \\ \hline\hline
+     Weighted kNN & Wavelets (Anden and Mallat) & \input{exp/scat_msc_knn/valid_top15_weighted_deverror.txt} \\
+     \hline
+     $1v1$ SVM & Edges on Spectrogram  & \input{exp/all_phones_exp/svm_little_reg_leehon_errorrate.txt} \\
+     \hline
+     $1vRest$ SVM & Wavelets (Anden and Mallat) & \input{exp/scat_msc_exp/dev_accuracy_1_0.0001_-9.75} \\
+     \hline
+     Mixtures & Parts on Spectrogram & \input{exp/bernoulli_all_phones_parts/bernoulli_parts_error_rate_2r_70p.txt} \\
+     \hline
+     Mixtures & Edges on Spectrogram & \input{exp/bernoulli_all_phones/bernoulli_dev_leehon_errorrate.txt} \\
+     \hline
+     $1vRest$ SVM & HOG & \input{exp/scat_msc_exp_hog/dev_accuracy_2_0.0001_-3} \\
+     \hline
+     $1vRest$ SVM & Spectrogram & \input{exp/spectrogram_exp/dev_accuracy_1_0.0001_-6} \\
+     \hline
+     $1vRest$ SVM & Multiscale Edges & \input{/home/mark/Research/phoneclassification/exp/multiscale_edges_exp/error} \\
+     \hline
+     Mixtures & Edges on Wavelets & \input{/home/mark/Research/phoneclassification/exp/scat_msc_exp_edges/error_rate} \\
+     \hline
+
+  \end{tabular}
+  \caption{Error rates for different classifiers and features}
+  \label{tab:comparison}
+\end{table}
+
+
 \end{document}
