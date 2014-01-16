@@ -1,4 +1,3 @@
-TIMIT=/home/mark/Template-Speech-Recognition/data/timit
 datadir=`pwd`/data/local/data
 local=`pwd`/local
 utils=`pwd`/utils
@@ -6,6 +5,7 @@ conf=`pwd`/conf
 old_exp=`pwd`/exp/pairwise_bernoulli_thresh
 exp=`pwd`/exp/pegasos
 mkdir -p $exp
+mkdir -p $conf
 
 # estimate the set of models
 
