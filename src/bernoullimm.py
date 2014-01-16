@@ -251,9 +251,9 @@ class BernoulliMM(BaseEstimator):
             # ensure that every component gets assigned
             if np.all(labels_to_components[label] == 0):
                 labels_to_components[label,np.argmax(responsibilities[L==label].sum(0))] = 1
-            
-        
-            
+
+
+
         return labels_to_components.astype(self.binary_type)
 
     def component_logprobs(self, X):
@@ -274,7 +274,7 @@ class BernoulliMM(BaseEstimator):
             lpr[:] = (log_product_of_bernoullis_mixture_likelihood(X, self.log_odds_,
                                                             self.log_inv_mean_sums_)
                + np.log(self.weights_))
-                                     
+
         return lpr
 
 
@@ -326,7 +326,7 @@ class BernoulliMM(BaseEstimator):
 
                 labelresponsibilities(lpr,logprob[block_id:blockend],
                                       L[block_id:blockend],labels_to_components,responsibilities[block_id:blockend])
-                
+
         else:
             lpr = (log_product_of_bernoullis_mixture_likelihood(X, self.log_odds_,
                                                             self.log_inv_mean_sums_)
@@ -336,7 +336,7 @@ class BernoulliMM(BaseEstimator):
             responsibilities = np.exp(lpr - logprob[:, np.newaxis])
         return logprob, responsibilities
 
-        
+
 
     def eval(self, X):
         """Evaluate the model on data
@@ -439,7 +439,7 @@ class BernoulliMM(BaseEstimator):
         H : array-like, shape = [n_labels, n_components], dtype = int
             H[l,c] is either -1 or in `range(newn_components)` and it indicates
             examples of particular label and particular component are mapped to what new component
-        
+
         NCC : array-like,  shape = [newn_components,], dtype=int
             NCC[i] is the old component associated with new component i
 
@@ -448,7 +448,7 @@ class BernoulliMM(BaseEstimator):
 
         """
         n_labels = components_to_labels.max() + 1
-        
+
         labels_components_weight = np.zeros((n_label,self.n_components),dtype=self.float_type)
         for label in xrange(n_labels):
             labels_components_weight[label] = responsibilities[L==label].sum(0)
@@ -459,7 +459,7 @@ class BernoulliMM(BaseEstimator):
             l_coords,c_coords = np.indices(labels_components_weight.shape)
             NCC = c_coords[labels_components_weight > threshold]
             NCL = l_coords[labels_components_weight > threshold]
-            
+
         elif splitmergetype=='most_violated':
             # split only the component that has the largest violation
             # drop only the most degenerate component
@@ -467,7 +467,7 @@ class BernoulliMM(BaseEstimator):
             weights_above_thresh = labels_components_weight * above_thresh_mask
             split_candidate_cs = np.nonzero(weights_above_thresh.sum(0) > 1)[0]
             drop_candidate_cs = np.nonzero(weights_above_thresh.sum(0) < 1)[0]
-            
+
             if len(split_candidate_cs) > 0:
                 split_c = np.argmax(weights_above_thesh.sum(0) - weights_above_thresh.max(0))
                 num_new = above_thresh_mask.sum(0)[split_c] - 1
@@ -491,7 +491,7 @@ class BernoulliMM(BaseEstimator):
             # new component is repeated at the end
             if num_new > 0:
                 NCC[-num_new:] = split_c
-                
+
             if np.any(NCC > self.n_components):
                 print "Too many old components"
                 import pdb; pdb.set_trace()
@@ -501,9 +501,9 @@ class BernoulliMM(BaseEstimator):
 
             NCL = components_to_labels[newcomponents_to_oldcomponents]
             NCL[newcomponents_to_labels==split_c] = new_labels
-            
-        
-        
+
+
+
         H = -1*np.ones((n_labels,
                         n_components),dtype=int)
         for new_c, (l, old_c) in enumerate(itertools.izip(NCL,
@@ -515,7 +515,7 @@ class BernoulliMM(BaseEstimator):
 
 
         return H, NCC, NCL
-        
+
     def predict_confusion(self,responsibilities,L,components_to_labels):
         """Compute the confusion matrix using the responsibilities
 
@@ -530,7 +530,7 @@ class BernoulliMM(BaseEstimator):
         """
         n_labels = components_to_labels.max() + 1
         C = confusion(components_to_labels[responsibilities.argmax(1)].astype(int),L,n_labels)
-        
+
         return C
 
     def predict_proba(self, X):
@@ -750,7 +750,7 @@ class BernoulliMM(BaseEstimator):
                 L[lid] = unique_Ldict[l]
         else:
             unique_Ldict = None
-        
+
         n_labels = L.max()+1
 
         # if debug_plot:
@@ -761,7 +761,7 @@ class BernoulliMM(BaseEstimator):
         for cur_init in range(self.n_init):
             if self.verbose:
                 print "Current parameter initialization: {0}".format(cur_init)
-                
+
 
             if 'm' in self.init_params or not hasattr(self,'means_'):
                 indices = np.arange(X.shape[0])
@@ -776,7 +776,7 @@ class BernoulliMM(BaseEstimator):
             else:
                 self.log_odds_, self.log_inv_mean_sums_ = _compute_log_odds_inv_means_sums(self.means_)
 
-                
+
             if 'w' in self.init_params or not hasattr(self,'weights_'):
                 self.weights_ = np.tile(1.0 / self.n_components,
                                         self.n_components)
@@ -801,7 +801,7 @@ class BernoulliMM(BaseEstimator):
                 labellogsumexp(lpr,L,labels_to_components,curr_adj_log_likelihood)
                 labelresponsibilities(lpr,curr_adj_log_likelihood,
                                       L,labels_to_components,adj_responsibilities)
-                
+
                 log_likelihood.append(curr_log_likelihood.sum())
                 adj_log_likelihood.append(curr_adj_log_likelihood.sum())
                 if self.verbose:
@@ -866,7 +866,7 @@ class BernoulliMM(BaseEstimator):
             should be numbers between 0 and self.num_classes-1
 
         splitcriterion : float
-            Threshold for when posterior likelihood is large enough 
+            Threshold for when posterior likelihood is large enough
             for a cluster to be split off a form a new cluster.
             The split and merge algorithm works as follows:
             If there are data from two different classes within
@@ -890,7 +890,7 @@ class BernoulliMM(BaseEstimator):
                 'BernoulliMM estimation with %s components, but got only %s samples' %
                 (self.n_components, X.shape[0]))
 
-        
+
         # setup the statistics for labels
         # ensure that the labels are a surjection onto
         # the set {0,1,...,self.n_labels-1}
@@ -903,7 +903,7 @@ class BernoulliMM(BaseEstimator):
                 L[lid] = unique_Ldict[l]
         else:
             unique_Ldict = None
-            
+
         # now we set the number of components to the number
         # of labels
         self.n_components=n_labels
@@ -911,9 +911,9 @@ class BernoulliMM(BaseEstimator):
         # the two
         components_labels_bmat = np.eye(self.n_labels,dtype=self.binary_type)
         components_to_labels = np.arange(self.n_labels,dtype=int)
-        
-        
-        
+
+
+
 
 
         max_log_prob = -np.infty
@@ -928,13 +928,13 @@ class BernoulliMM(BaseEstimator):
             # a given label class
             self.means_ = np.zeros((self.n_components,
                                         self.data_shape),dtype=self.float_type)
-            # we assume that there is a simple bijection for initializing 
+            # we assume that there is a simple bijection for initializing
             # the arguments
             for i in xrange(self.n_components):
                 self.means_[i] = np.clip(X[components_to_labels[i]==L].mean(0),
                                         self.min_prob,
                                         1-self.min_prob)
-                    
+
             self.log_odds_, self.log_inv_mean_sums_ = _compute_log_odds_inv_means_sums(self.means_)
 
         if 'w' in self.init_params or not hasattr(self,'weights_'):
@@ -943,7 +943,7 @@ class BernoulliMM(BaseEstimator):
 
 
 
-            
+
         log_likelihood = []
         self.iterations = 0
         self.converged_ = False
@@ -960,7 +960,7 @@ class BernoulliMM(BaseEstimator):
             labellogprob = np.zeros(X.shape[0],dtype=self.float_type)
             labelresponsibilities = np.zeros((X.shape[0],self.n_components),dtype=self.float_type)
 
-            
+
             log_likelihood.append(curr_log_likelihood.sum())
             if self.verbose:
                 accuracy = np.diag(confusion).sum()/np.sum(confusion)
@@ -1009,6 +1009,10 @@ class BernoulliMM(BaseEstimator):
 
         return self
 
+    def init_means_weights(self,means,weights):
+        self.means_ = means
+        self.weights_ = weights
+        self.log_odds_, self.log_inv_mean_sums_ = _compute_log_odds_inv_means_sums(self.means_)
 
     def _do_mstep(self, X, responsibilities, params, min_prob=1e-7):
         """ Perform the Mstep of the EM algorithm and return the class weights
