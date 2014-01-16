@@ -114,7 +114,7 @@ EOF
 
 for ncomponents in 2 3 6 9 12 ; do
 python $local/estimate_all_models.py --phones $datadir/phone.list\
-    --config $conf/pairwise.conf\
+    --config $conf/pegasos.conf\
     --data_prefix ${datadir}\
     --data_suffix train_examples.npy\
     --out_prefix $exp\
