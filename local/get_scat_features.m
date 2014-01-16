@@ -14,7 +14,23 @@ sc1_opt.oversampling=2;
 filters = filter_bank(N, filt1_opt);
 
 x = wavread('/var/tmp/stoehr/timit_wav/train/dr1/fcjf0/sa1.wav');
-z = format_scat(log_scat(spec_freq_average(x,filters,sc1_opt)));
+
+filt1_opt.filter_type = {'gabor_1d','morlet_1d'};
+filt1_opt.Q = [8 1];
+filt1_opt.J = T_to_J(512,filt1_opt);
+
+
+filters = filter_bank(N, filt1_opt);
+
+sc1_opt.M = 2;
+
+Wop = wavelet_factory_1d(N, filt1_opt, sc1_opt);
+z = log_scat(renorm_scat(scat(x(3*N:4*N),Wop)));
+
+
+z = wavelet_1d(x,filters{2},sc1_opt);
+
+z = spec_freq_average(x,filters,sc1_opt);
 scatt_fun = @(x)(format_scat(log_scat(spec_freq_average(x,filters,sc1_opt))));
 
 
