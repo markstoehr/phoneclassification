@@ -34,6 +34,8 @@ def main(args):
         example_length = int((frame_ends - frame_starts).max())
 
         sr, x = wavfile.read(fpath)
+        x = x.astype(float)/2**15
+        x = x/np.std(x)
         S,sample_mapping, sample_to_frames = gtrd.get_spectrogram_use_config(x,config_d['SPECTROGRAM'],return_sample_mapping=True)
         X = gtrd.get_edge_features_use_config(S.T,config_d['EDGES'])
         S = np.vstack( (S[:example_length][::-1],
