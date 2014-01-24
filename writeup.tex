@@ -1,28 +1,38 @@
 % ---- ETD Document Class and Useful Packages ---- %
 \documentclass{article}
-\usepackage{subfigure,epsfig,amsfonts,bigints}
+\usepackage{amsfonts,bigints}
+\usepackage{float}
 \usepackage{natbib}
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{amsthm}
-\usepackage{algorithmic,algorithm}
 \usepackage{caption}
 \usepackage{hyperref}
 \usepackage{fullpage}
-\usepackage{graphicx}\usepackage{array}
+\usepackage{graphicx}
+\usepackage{array}
 \usepackage{dsfont}
+\usepackage{subcaption}
+
+
+
+\usepackage[ruled]{algorithm2e}
+\renewcommand{\algorithmcfname}{ALGORITHM}
+\SetAlFnt{\small}
+\SetAlCapFnt{\small}
+\SetAlCapNameFnt{\small}
+
 
 %% Use these commands to set biographic information for the title page:
 \title{Phone Classification Work}
 \author{Mark Stoehr}
 \date{\today}
 
-\renewcommand{\algorithmicrequire}{\textbf{Input:}}
-\renewcommand{\algorithmicensure}{\textbf{Output:}}
 
 \begin{document}
 
 \maketitle
+\tableofcontents
 
 \section{Introduction}
 
@@ -122,11 +132,17 @@ SVM result.
      \hline
      $1v1$ SVM & Edges on Spectrogram  & \input{exp/all_phones_exp/svm_little_reg_leehon_errorrate.txt} \\
      \hline
-     $1vRest$ SVM & Wavelets (Anden and Mallat) & \input{exp/scat_msc_exp/dev_accuracy_1_0.0001_-9.75} \\
+     2-Mixture Multiclass SVM \ref{sec:mixture-svm-pegasos} & Edges on Spectrogram  & \input{exp/pegasos/leehon39_warm_train_pegasos_dev_10Ninit_2C_0.037037lambda_Prj_error_rate.txt}\\
+     \hline
+     $1vRest$ SVM & Wavelets (Anden and Mallat) & \input{exp/scat_msc_exp/dev_accuracy_1_0.0001_-9.75} \\ 
+     \hline
+     $1v1$ Pegasos SVM (warm-start) & Edges on Spectrogram & \input{exp/pegasos/leehon_confusion_matrix_dev_output_1C_Q.txt}\\
      \hline
      Mixtures & Parts on Spectrogram & \input{exp/bernoulli_all_phones_parts/bernoulli_parts_error_rate_2r_70p.txt} \\
      \hline
-     Mixtures & Edges on Spectrogram & \input{exp/bernoulli_all_phones/bernoulli_dev_leehon_errorrate.txt} \\
+     6 Mixtures & Edges on Spectrogram & \input{exp/bernoulli_all_phones/bernoulli_dev_leehon_errorrate.txt} \\
+     \hline
+     40 Mixtures, 10 Inits & Edges on Spectrogram & \input{exp/pegasos/leehon39_bmm_dev_10Ninit_40C_error_rate.txt} \\
      \hline
      $1vRest$ SVM & HOG & \input{exp/scat_msc_exp_hog/dev_accuracy_2_0.0001_-3} \\
      \hline
@@ -141,6 +157,1178 @@ SVM result.
   \caption{Error rates for different classifiers and features}
   \label{tab:comparison}
 \end{table}
+
+These comparisons of results, are, however, very sensitive to the
+quantities of examples.  In particular the most common mistake is
+\texttt{ix} versus \texttt{iy} but that is, in part, because
+they are among the most common phones in the dataset.  In gauging
+the predictive usefulness of a model on a particular language
+it makes sense to focus ones efforts on preventing mistakes among
+the most common syllables, but if we are going to understand
+the behavior of these different methods on different classes of
+phones then we want to understand how they compare on a per-class
+basis.
+
+\section{Results for different numbers of components in the Bernoulli mixture model}
+
+We compare the effect of components on results and also compare what happens
+when we use different numbers of random initializations (i.e. we run the algorithm
+multiple times with different random starts). The results
+can be seen in \autoref{tab:bmm-initializations-nmix}.
+\begin{table}[h]
+  \centering
+  \begin{tabular}{| c | c |  c |}
+    \hline
+     \# components & \# Initializations  & Error Rate \\ \hline\hline
+     2 & 5 & \input{exp/pairwise_bernoulli_thresh/leehon39_bmm_dev_5Ninit_2C_error_rate.txt} \\
+     \hline
+     3 & 5 & \input{exp/pairwise_bernoulli_thresh/leehon39_bmm_dev_5Ninit_3C_error_rate.txt} \\
+     \hline
+     6 & 5 & \input{exp/pairwise_bernoulli_thresh/leehon39_bmm_dev_5Ninit_6C_error_rate.txt} \\
+     \hline
+     9 & 5 &  \input{exp/pairwise_bernoulli_thresh/leehon39_bmm_dev_5Ninit_9C_error_rate.txt} \\
+     12 & 5 &  \input{exp/pairwise_bernoulli_thresh/leehon39_bmm_dev_5Ninit_12C_error_rate.txt} \\
+     \hline
+     2 & 10 & \input{exp/pegasos/leehon39_bmm_dev_10Ninit_2C_error_rate.txt} \\
+     \hline
+     3 & 10 & \input{exp/pegasos/leehon39_bmm_dev_10Ninit_3C_error_rate.txt} \\
+     \hline
+     6 & 10 & \input{exp/pegasos/leehon39_bmm_dev_10Ninit_6C_error_rate.txt} \\
+     \hline
+     9 & 10 &  \input{exp/pegasos/leehon39_bmm_dev_10Ninit_9C_error_rate.txt} \\
+     12 & 10 &  \input{exp/pegasos/leehon39_bmm_dev_10Ninit_12C_error_rate.txt} \\
+     \hline
+     15 & 10 & \input{exp/pegasos/leehon39_bmm_dev_10Ninit_15C_error_rate.txt} \\
+     \hline
+     18 & 10 &  \input{exp/pegasos/leehon39_bmm_dev_10Ninit_18C_error_rate.txt} \\
+     21 & 10 &  \input{exp/pegasos/leehon39_bmm_dev_10Ninit_21C_error_rate.txt} \\
+     \hline
+     24 & 10 &  \input{exp/pegasos/leehon39_bmm_dev_10Ninit_24C_error_rate.txt} \\
+     \hline
+     27 & 10 &  \input{exp/pegasos/leehon39_bmm_dev_10Ninit_27C_error_rate.txt} \\
+     \hline
+     40 & 10 &  \input{exp/pegasos/leehon39_bmm_dev_10Ninit_40C_error_rate.txt} \\
+     \hline
+     50 & 10 &  \input{exp/pegasos/leehon39_bmm_dev_10Ninit_50C_error_rate.txt} \\
+     \hline
+     60 & 10 &  \input{exp/pegasos/leehon39_bmm_dev_10Ninit_60C_error_rate.txt} \\
+     \hline
+     70 & 10 &  \input{exp/pegasos/leehon39_bmm_dev_10Ninit_70C_error_rate.txt} \\
+     \hline
+  \end{tabular}
+  \caption{Bernoulli Mixture Error Rates with different numbers of initializations}
+  \label{tab:bmm-initializations-nmix}
+\end{table}
+The variance makes us wonder whether the recent \texttt{k-means++} algorithm
+might be able to improve results.
+
+\section{Overfitting the Training Data}
+
+\section{Spreading differently across different frequency bands}
+
+\section{Weight Thresholding and 1vs1}
+
+We seek to develop a technique to threshold the entries to create a 1 versus 1 generative technique. We have noticed
+that in 1 versus 1 classification the SVM performs much better than in the 1 versus rest. We want to develop
+a technique that will perform 1 versus 1 using generative models.  Additionally, we want to have classifiers that 
+are especially attuned to the minute differences between two models and focus only on those areas that
+are ambiguous between two phone classes.
+
+We consider a model where we estimate a single component per phone class.  For every pair of phone classes
+we compute the log-likelihood ratio filter and threshold all of the small entries.  This provides a unique-pairwise
+classifier.
+
+For testing we run every pairwise classifier on an example and whichever class gets the most votes is the predicted class.
+
+Our setting for this problem is that we have binary data paired
+with a class
+$\{(y_n,X_n)\}_{n=1}^N$ so that $y_n\in \{1,\ldots,C\}$ and
+$X_n\in \{0,1\}^D$.  For each class $c$ with $1\leq c\leq C$
+we have $N_c<  N$ data $\{(y_n,X_n)\}_{n\in\mathcal{N}_c}$
+where $y_n=c$ for all $n\in\mathcal{N}_c$.  In the Naive Bayes
+model we estimate a class-dependent probability distribution
+for the data where
+\begin{equation}
+\mathbb{P}_c(X = x) = \prod_{d=1}^D \theta_c^{x(d)}(1-\theta_c(d)^{1-x(d)}
+\end{equation}
+with our estimate being 
+\begin{equation}
+\hat{\theta}_c(d) = \frac{1}{N_c}\sum_{n\in\mathcal{N}_c} X_n(d).
+\end{equation}
+Under that model the log-likelihood ratio test between whether
+$X$ comes from class $c$ or $c'$ is
+\begin{equation}\label{eq:linearloglike}
+\log\frac{\mathbb{P}_c(X=x)}{\mathbb{P}_{c'}(X=x)} =
+\sum_{d=1}^D x(d)\log\frac{\theta_c(d)(1-\theta_{c'}(d))}{\theta_{c'}(d)(1-\theta_c(d))} + \log\frac{1-\theta_c(d)}{1-\theta_{c'}(d)}
+\end{equation}
+and we may write \autoref{eq:linearloglike} as a linear classifier
+\begin{equation}
+\log\frac{\mathbb{P}_c(X=x)}{\mathbb{P}_{c'}(X=x)} = w^\top x+b
+\end{equation}
+where
+\begin{align*}
+w(d) &= \log\frac{\theta_c(d)(1-\theta_{c'}(d))}{\theta_{c'}(d)(1-\theta_c(d))}\\
+b &= \sum_{d=1}^D \log\frac{1-\theta_c(d)}{1-\theta_{c'}(d)}
+\end{align*}
+for $1\leq d\leq D$.  Our estimate of the log-likelihood ratio
+linear classifier $w$ that discriminates between class $c$ and
+$c'$ is written $\hat{w}_{c,c'}$.  A thresholding procedure
+consists in a binary vector-valued function $\mathcal{A}(N_c,\theta_c,N_{c'},\theta_{c'})\in \{0,1\}^D$ such that
+\begin{equation}
+\hat{w}_{c,c'}(d) = \begin{cases}
+\log\frac{\theta_c(d)(1-\theta_{c'}(d))}{\theta_{c'}(d)(1-\theta_c(d))} & \mathcal{A}(N_c,\theta_c,N_{c'},\theta_{c'})(d) =1\\
+0 & \text{otherwise}
+\end{cases}
+\end{equation}
+with a similar procedure for $\hat{b}_{c,c'}$ based on the 
+same criterion.
+Note that in the case where
+\begin{equation}
+\theta_c(d)=\theta_{c'}(d) \Leftrightarrow \frac{\theta_c(d)(1-\theta_{c'}(d))}{\theta_{c'}(d)(1-\theta_c(d))} = \frac{1-\theta_c(d)}{1-\theta_{c'}(d)} = 1 
+\end{equation}
+we have $w_{c,c'}=0$ so $\mathcal{A}(N_c,\theta_c,N_{c'},\theta_{c'})$ may be viewed as a hypothesis test for the difference of means in
+two binomial populations
+\begin{align*}
+H_0(c,c',d)\colon& \theta_c(d)=\theta_{c'}(d)\\
+H_1(c,c',d)\colon& \theta_c(d)\neq \theta_{c'}(d)
+\end{align*}
+since 
+$N_c\hat{\theta}_c(d)\sim\newoperatorname{Binomial}(N_c,\theta_c)$
+for each class $c$.
+Since we are dealing with large populations we may use a normal
+approximation to the binomial and construct a test using
+a two-sided Z-test procedure with pooled sample proportion
+\begin{equation}
+\hat{\theta}_{c,c'}(d) = \frac{N_c\hat{\theta}_c(d) +N_{c'}\hat{\theta}_{c'}(d) }{N_c+N_{c'}}
+\end{equation}
+and standard error
+\begin{equation}
+\hat{SE}_{c,c'}(d) = \sqrt{ \hat{\theta}_{c,c'}(d) (1-\hat{\theta}_{c,c'}(d))
+\frac{N_c+N_{c'}}{N_cN_{c'}}}
+\end{equation}
+so that the test statistic
+\begin{equation}
+\hat{z}_{c,c'}(d) = \frac{\hat{\theta}_c(d) - \hat{\theta}_{c'}(d)}{\hat{SE}_{c,c'}(d)}
+\end{equation}
+has approximately $N(0,1)$ distribution. Simple thresholding for
+a single coordinate $\hat{w}_{c,c'}(d)$ would pick a significance
+level $\alpha$ and have
+\begin{equation}
+\hat{w}_{c,c'}(d) = \begin{cases}
+\log\frac{\hat{\theta}_c(d)(1-\hat{\theta}_{c'}(d))}{\hat{\theta}_{c'}(d)(1-\hat{\theta}_c(d))} & 2\Phi(\hat{z}_{c,c'}(d))< \alpha\\
+0 & \text{otherwise}
+\end{cases}
+\end{equation}
+where $\Phi$ is the cumulative distribution function for the 
+standard normal distribution. However, we are in a multiple
+testing scenario where we are performing such a hypothesis test
+for every pair of classes $c,c'$ and coordinate $d$.  A simple
+Bonferroni correction procedure would mean that we would use
+an adjusted $\alpha$ of the form
+\begin{equation}
+\frac{\alpha}{{C \choose 2} D}
+\end{equation}
+which would mean that we would fail to reject the null
+hypothesis for essentially every test.
+
+
+
+\subsection{Quantiles}
+
+%
+% TODO: - put plots into a single float
+%       - write up what the actual chosen quantiles that I thresholded at were
+%
+
+We could also individually threshold on the basis of quantiles
+this serves as a baseline to understand whether the False-discovery
+rate or other techniques add anything.  With the quantile
+thresholding procedure we pick a quantile $\tau$ and for every
+pair of hypotheses we threshold everything below that quantile.
+We start with $\tau \in \{0.001, 0.01,0.05,0.10,0.20,0.30,0.40\}$
+and see the results obtained for these different values 
+of $\tau$.
+
+We find that we generally hurt performance by working with quantiles
+\begin{table}[h]
+  \centering
+  \begin{tabular}{| l |  r |}
+    \hline
+     Quantile & Error Rate \\ \hline\hline
+0 & \input{exp/pairwise_bernoulli_thresh/leehon_confusion_matrix_dev_output_1C_0Q.txt} \\ \hline
+0.0000001 & \input{exp/pairwise_bernoulli_thresh/leehon_confusion_matrix_dev_output_1C_0.0000001Q.txt} \\ \hline
+0.000001 & \input{exp/pairwise_bernoulli_thresh/leehon_confusion_matrix_dev_output_1C_0.000001Q.txt} \\ \hline
+0.00001 & \input{exp/pairwise_bernoulli_thresh/leehon_confusion_matrix_dev_output_1C_0.00001Q.txt} \\ \hline
+0.0001 & \input{exp/pairwise_bernoulli_thresh/leehon_confusion_matrix_dev_output_1C_0.0001Q.txt} \\ \hline
+
+0.001 & \input{exp/pairwise_bernoulli_thresh/leehon_confusion_matrix_dev_output_1C_0.001Q.txt} \\ \hline
+0.01 & \input{exp/pairwise_bernoulli_thresh/leehon_confusion_matrix_dev_output_1C_0.01Q.txt} \\ \hline
+0.05 & \input{exp/pairwise_bernoulli_thresh/leehon_confusion_matrix_dev_output_1C_0.05Q.txt} \\ \hline
+0.1 & \input{exp/pairwise_bernoulli_thresh/leehon_confusion_matrix_dev_output_1C_0.1Q.txt} \\ \hline
+0.15 & \input{exp/pairwise_bernoulli_thresh/leehon_confusion_matrix_dev_output_1C_0.15Q.txt} \\ \hline
+0.2 & \input{exp/pairwise_bernoulli_thresh/leehon_confusion_matrix_dev_output_1C_0.2Q.txt} \\ \hline
+0.25 & \input{exp/pairwise_bernoulli_thresh/leehon_confusion_matrix_dev_output_1C_0.25Q.txt} \\ \hline
+0.3 & \input{exp/pairwise_bernoulli_thresh/leehon_confusion_matrix_dev_output_1C_0.3Q.txt} \\ \hline
+0.4 & \input{exp/pairwise_bernoulli_thresh/leehon_confusion_matrix_dev_output_1C_0.4Q.txt} \\ \hline
+  \end{tabular}
+  \caption{Averaged Pairwise SVM Error rates for different threshold quantiles over TIMIT development set}
+  \label{tab:pairwiseSVM_simple_quantile_results}
+\end{table}
+as seen in \autoref{tab:pairwiseSVM_simple_quantile_results} when comparing results overall.  
+
+\subsubsection{Pairwise Results}
+\label{sec:pairwise-results}
+In order to get a better sense
+of the performance we also want to look at how performance of the
+classifier changes on just the two class problem.  In the current
+setting we require that all the classifiers vote on which phone,
+but another case is where we know the pair and we are interested
+in how the thresholded classifier performs on the pairwise classification task.
+
+The output from this task is a pairwise loss matrix $M_q$ for each
+quantile $q$ where we have
+a row and column for each phone class so that for each pair
+of classes $c\neq c'$ we have $M_q(c,c')$ is the number of times
+data from class $c$ is classified as $c'$ by the classifier $w_{c,c'}$.  Generally speaking classification was good one question we have
+is about the differences  $M_q(c,c') - M_{q'}(c,c')$ particularly
+if we set the quantile $q'=0$ so that $M_{q'}(c,c')$ are the
+pairwise results without thresholding.  The comparison
+$M_q - M_0$ shows how thresholding changes the pairwise results.
+We are interested in the distribution of $M_q(c,c')-M_0(c,c')$
+so we look at the value for every pair of classes $c,c'$ and construct
+a KDE estimate.  These are plotted in
+\autoref{fig:kdediff_pairwise_0.0000001}
+\autoref{fig:kdediff_pairwise_0.000001}
+\autoref{fig:kdediff_pairwise_0.00001}
+\autoref{fig:kdediff_pairwise_0.0001}
+\autoref{fig:kdediff_pairwise_0.001}
+\autoref{fig:kdediff_pairwise_0.01}
+\autoref{fig:kdediff_pairwise_0.05}
+\autoref{fig:kdediff_pairwise_0.1}
+\autoref{fig:kdediff_pairwise_0.15}
+\autoref{fig:kdediff_pairwise_0.2}
+\autoref{fig:kdediff_pairwise_0.25}
+\autoref{fig:kdediff_pairwise_0.3}
+\autoref{fig:kdediff_pairwise_0.4}
+if thresholding worked very well then the distribution would be
+centered on negative number since that would mean that $M_q$
+made fewer mistakes than $M_0$ so $M_q(c,c')-M_0(c,c')<0$ for most
+pairs of classes $c,c'$.  On the other hand a more positive skew
+indicates that $M_q$ has more mistakes than $M_0$.  In general, we
+see that as the thresholding increases there tends to be a positive
+skew to the number of mistakes, so thresholding generally tends to
+decrease performance.
+
+\begin{figure}
+\centering
+\begin{subfigure}[h]{.3\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{{exp/pairwise_bernoulli_thresh/known_pair_confusion_matrix_compare_1C_0Q_0.0000001Q}.png}
+    \caption{KDE over pairwise score differences for quantiles q=0.0000001 versus q=0}
+    \label{fig:kdediff_pairwise_0.0000001}
+    \end{subfigure} 
+~
+\begin{subfigure}[h]{.3\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{{exp/pairwise_bernoulli_thresh/known_pair_confusion_matrix_compare_1C_0Q_0.000001Q}.png}
+    \caption{KDE over pairwise score differences for quantiles q=0.000001 versus q=0}
+    \label{fig:kdediff_pairwise_0.000001}
+    \end{subfigure}
+~
+\begin{subfigure}[h]{.3\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{{exp/pairwise_bernoulli_thresh/known_pair_confusion_matrix_compare_1C_0Q_0.00001Q}.png}
+    \caption{KDE over pairwise score differences for quantiles q=0.00001 versus q=0}
+    \label{fig:kdediff_pairwise_0.00001}
+    \end{subfigure}
+~\begin{subfigure}[h]{.3\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{{exp/pairwise_bernoulli_thresh/known_pair_confusion_matrix_compare_1C_0Q_0.0001Q}.png}
+    \caption{KDE over pairwise score differences for quantiles q=0.0001 versus q=0}
+    \label{fig:kdediff_pairwise_0.0001}
+    \end{subfigure}
+~\begin{subfigure}[h]{.3\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{{exp/pairwise_bernoulli_thresh/known_pair_confusion_matrix_compare_1C_0Q_0.001Q}.png}
+    \caption{KDE over pairwise score differences for quantiles q=0.001 versus q=0}
+    \label{fig:kdediff_pairwise_0.001}
+    \end{subfigure}
+~\begin{subfigure}[h]{.3\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{{exp/pairwise_bernoulli_thresh/known_pair_confusion_matrix_compare_1C_0Q_0.01Q}.png}
+    \caption{KDE over pairwise score differences for quantiles q=0.01 versus q=0}
+    \label{fig:kdediff_pairwise_0.01}
+    \end{subfigure}
+\end{figure}
+\begin{figure}
+\begin{subfigure}{.3\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{{exp/pairwise_bernoulli_thresh/known_pair_confusion_matrix_compare_1C_0Q_0.05Q}.png}
+    \caption{KDE over pairwise score differences for quantiles q=0.05 versus q=0}
+    \label{fig:kdediff_pairwise_0.05}
+    \end{subfigure}
+~\begin{subfigure}{.3\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{{exp/pairwise_bernoulli_thresh/known_pair_confusion_matrix_compare_1C_0Q_0.1Q}.png}
+    \caption{KDE over pairwise score differences for quantiles q=0.1 versus q=0}
+    \label{fig:kdediff_pairwise_0.1}
+    \end{subfigure}
+~\begin{subfigure}{.3\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{{exp/pairwise_bernoulli_thresh/known_pair_confusion_matrix_compare_1C_0Q_0.15Q}.png}
+    \caption{KDE over pairwise score differences for quantiles q=0.15 versus q=0}
+    \label{fig:kdediff_pairwise_0.15}
+    \end{subfigure}
+~\begin{subfigure}{.3\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{{exp/pairwise_bernoulli_thresh/known_pair_confusion_matrix_compare_1C_0Q_0.2Q}.png}
+    \caption{KDE over pairwise score differences for quantiles q=0.2 versus q=0}
+    \label{fig:kdediff_pairwise_0.2}
+    \end{subfigure}
+~\begin{subfigure}{.3\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{{exp/pairwise_bernoulli_thresh/known_pair_confusion_matrix_compare_1C_0Q_0.25Q}.png}
+    \caption{KDE over pairwise score differences for quantiles q=0.25 versus q=0}
+    \label{fig:kdediff_pairwise_0.25}
+    \end{subfigure}
+~\begin{subfigure}{.3\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{{exp/pairwise_bernoulli_thresh/known_pair_confusion_matrix_compare_1C_0Q_0.3Q}.png}
+    \caption{KDE over pairwise score differences for quantiles q=0.3 versus q=0}
+    \label{fig:kdediff_pairwise_0.3}
+    \end{subfigure}
+~\begin{subfigure}{.3\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{{exp/pairwise_bernoulli_thresh/known_pair_confusion_matrix_compare_1C_0Q_0.4Q}.png}
+    \caption{KDE over pairwise score differences for quantiles q=0.4 versus q=0}
+    \label{fig:kdediff_pairwise_0.4}
+    \end{subfigure}
+\end{figure}
+\subsection{FDR}
+
+One way arround the overly-conservative error rates is to use
+the Benjamini-Hochberg procedure describe in 
+\cite{bhoch95} where the threshold is set so that the 
+expected false discovery rate is below some threshold. The
+false discovery rate is defined as $F/R$ where
+$F$ is the number of falsely rejected null hypotheses and
+$R$ is the number of rejected null hypotheses.  In this procedure
+we collect a set of p-values $P_{c,c',d}=2\Phi(\hat{z}_{c,c'}(d))$
+for every pair of classes $c$, $c'$ and coordinate $d$.  We then
+compute the order statistics $P_{(1)} <P_{(2)} <\cdots <P_{(K)}$
+of the p-values and we let $k_*$ be the largest $k$ such that
+\begin{equation}
+P_{(k)} \leq \frac{k}{K} \alpha
+\end{equation}
+where $\alpha$ is the desired expected false discovery rate upperbound.  We then reject every hypothesis $P_{(k)}$ for $1\leq k\leq k_*$.
+Using this procedure we find that there is a small increase
+in performance associated with using a very conservative $\alpha$
+threshold as seen in \autoref{tab:pairwise_bhfdr_thresholding_results}
+\begin{table}
+  \centering
+  \begin{tabular}{| l |  r |}
+    \hline
+     Quantile & Error Rate \\ \hline\hline
+0.0000001 & \input{exp/pairwise_bernoulli_thresh/leehon_confusion_matrix_dev_output_1C_0.0000001Q_bhfdr.txt} \\ \hline
+0.000001 & \input{exp/pairwise_bernoulli_thresh/leehon_confusion_matrix_dev_output_1C_0.000001Q_bhfdr.txt} \\ \hline
+0.00001 & \input{exp/pairwise_bernoulli_thresh/leehon_confusion_matrix_dev_output_1C_0.00001Q_bhfdr.txt} \\ \hline
+0.0001 & \input{exp/pairwise_bernoulli_thresh/leehon_confusion_matrix_dev_output_1C_0.0001Q_bhfdr.txt} \\ \hline
+
+0.001 & \input{exp/pairwise_bernoulli_thresh/leehon_confusion_matrix_dev_output_1C_0.001Q_bhfdr.txt} \\ \hline
+0.01 & \input{exp/pairwise_bernoulli_thresh/leehon_confusion_matrix_dev_output_1C_0.01Q_bhfdr.txt} \\ \hline
+0.05 & \input{exp/pairwise_bernoulli_thresh/leehon_confusion_matrix_dev_output_1C_0.05Q_bhfdr.txt} \\ \hline
+0.1 & \input{exp/pairwise_bernoulli_thresh/leehon_confusion_matrix_dev_output_1C_0.1Q_bhfdr.txt} \\ \hline
+0.15 & \input{exp/pairwise_bernoulli_thresh/leehon_confusion_matrix_dev_output_1C_0.15Q_bhfdr.txt} \\ \hline
+0.2 & \input{exp/pairwise_bernoulli_thresh/leehon_confusion_matrix_dev_output_1C_0.2Q_bhfdr.txt} \\ \hline
+0.25 & \input{exp/pairwise_bernoulli_thresh/leehon_confusion_matrix_dev_output_1C_0.25Q_bhfdr.txt} \\ \hline
+0.3 & \input{exp/pairwise_bernoulli_thresh/leehon_confusion_matrix_dev_output_1C_0.3Q_bhfdr.txt} \\ \hline
+0.4 & \input{exp/pairwise_bernoulli_thresh/leehon_confusion_matrix_dev_output_1C_0.4Q_bhfdr.txt} \\ \hline
+  \end{tabular}
+  \caption{Averaged Pairwise SVM Error rates for different threshold quantiles using the BH FDR thresholding technique over TIMIT development set}
+  \label{tab:pairwise_bhfdr_thresholding_results}
+\end{table}
+
+We can analyze the pairwise results in a similar manner to \autoref{sec:pairwise-results} and we find that there is a slight negative skew to the results although graphically it appears that the BH FDR procedure increases pairwise mistakes about as often as it decreases
+pairwise mistakes.  The plots are in
+\autoref{fig:kdediff_pairwise_bhfdr_0.0000001}
+\autoref{fig:kdediff_pairwise_bhfdr_0.000001}
+\autoref{fig:kdediff_pairwise_bhfdr_0.00001}
+\autoref{fig:kdediff_pairwise_bhfdr_0.0001}
+\autoref{fig:kdediff_pairwise_bhfdr_0.001}
+\autoref{fig:kdediff_pairwise_bhfdr_0.01}
+\autoref{fig:kdediff_pairwise_bhfdr_0.05}
+\autoref{fig:kdediff_pairwise_bhfdr_0.1}
+\autoref{fig:kdediff_pairwise_bhfdr_0.15}
+\autoref{fig:kdediff_pairwise_bhfdr_0.2}
+\autoref{fig:kdediff_pairwise_bhfdr_0.25}
+\autoref{fig:kdediff_pairwise_bhfdr_0.3}
+\autoref{fig:kdediff_pairwise_bhfdr_0.4}
+Recall that
+if thresholding worked very well then the distribution would be
+centered on negative number since that would mean that $M_q$
+made fewer mistakes than $M_0$ so $M_q(c,c')-M_0(c,c')<0$ for most
+pairs of classes $c,c'$.  On the other hand a more positive skew
+indicates that $M_q$ has more mistakes than $M_0$.  In general, we
+see that as the thresholding increases there tends to be a positive
+skew to the number of mistakes, so thresholding generally tends to
+decrease performance.
+
+\begin{figure}
+\centering
+\begin{subfigure}{.25\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{{exp/pairwise_bernoulli_thresh/known_pair_confusion_matrix_compare_1C_0Q_simple_0.0000001Q_bhfdr}.png}
+    \caption{KDE over pairwise score differences for BH FDR thresholding at q=0.0000001 versus q=0}
+    \label{fig:kdediff_pairwise_bhfdr_0.0000001}
+    \end{subfigure}
+~\begin{subfigure}{.25\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{{exp/pairwise_bernoulli_thresh/known_pair_confusion_matrix_compare_1C_0Q_simple_0.000001Q_bhfdr}.png}
+    \caption{KDE over pairwise score differences for BH FDR thresholding at q=0.000001 versus q=0}
+    \label{fig:kdediff_pairwise_bhfdr_0.000001}
+    \end{subfigure}
+~\begin{subfigure}{.25\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{{exp/pairwise_bernoulli_thresh/known_pair_confusion_matrix_compare_1C_0Q_simple_0.00001Q_bhfdr}.png}
+    \caption{KDE over pairwise score differences for BH FDR thresholding at q=0.00001 versus q=0}
+    \label{fig:kdediff_pairwise_bhfdr_0.00001}
+    \end{subfigure}
+~\begin{subfigure}{.25\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{{exp/pairwise_bernoulli_thresh/known_pair_confusion_matrix_compare_1C_0Q_simple_0.0001Q_bhfdr}.png}
+    \caption{KDE over pairwise score differences for BH FDR thresholding at q=0.0001 versus q=0}
+    \label{fig:kdediff_pairwise_bhfdr_0.0001}
+    \end{subfigure}
+~\begin{subfigure}{.25\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{{exp/pairwise_bernoulli_thresh/known_pair_confusion_matrix_compare_1C_0Q_simple_0.001Q_bhfdr}.png}
+    \caption{KDE over pairwise score differences for BH FDR thresholding at q=0.001 versus q=0}
+    \label{fig:kdediff_pairwise_bhfdr_0.001}
+    \end{subfigure}
+~\begin{subfigure}{.25\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{{exp/pairwise_bernoulli_thresh/known_pair_confusion_matrix_compare_1C_0Q_simple_0.01Q_bhfdr}.png}
+    \caption{KDE over pairwise score differences for BH FDR thresholding at q=0.01 versus q=0}
+    \label{fig:kdediff_pairwise_bhfdr_0.01}
+    \end{subfigure}
+\end{figure}
+
+
+\begin{figure}
+\begin{subfigure}{.27\textwidth}
+  \centering
+    \includegraphics[width=\textwidth]{{exp/pairwise_bernoulli_thresh/known_pair_confusion_matrix_compare_1C_0Q_simple_0.05Q_bhfdr}.png}
+    \caption{KDE over pairwise score differences for BH FDR thresholding at q=0.05 versus q=0}
+    \label{fig:kdediff_pairwise_bhfdr_0.05}
+\end{subfigure}
+~\begin{subfigure}{.27\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{{exp/pairwise_bernoulli_thresh/known_pair_confusion_matrix_compare_1C_0Q_simple_0.1Q_bhfdr}.png}
+    \caption{KDE over pairwise score differences for BH FDR thresholding at q=0.1 versus q=0}
+    \label{fig:kdediff_pairwise_bhfdr_0.1}
+    \end{subfigure}
+~\begin{subfigure}{.27\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{{exp/pairwise_bernoulli_thresh/known_pair_confusion_matrix_compare_1C_0Q_simple_0.15Q_bhfdr}.png}
+    \caption{KDE over pairwise score differences for BH FDR thresholding at q=0.15 versus q=0}
+    \label{fig:kdediff_pairwise_bhfdr_0.15}
+    \end{subfigure}
+~\begin{subfigure}{.27\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{{exp/pairwise_bernoulli_thresh/known_pair_confusion_matrix_compare_1C_0Q_simple_0.2Q_bhfdr}.png}
+    \caption{KDE over pairwise score differences for BH FDR thresholding at q=0.2 versus q=0}
+    \label{fig:kdediff_pairwise_bhfdr_0.2}
+    \end{subfigure}
+~\begin{subfigure}{.27\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{{exp/pairwise_bernoulli_thresh/known_pair_confusion_matrix_compare_1C_0Q_simple_0.25Q_bhfdr}.png}
+    \caption{KDE over pairwise score differences for BH FDR thresholding at q=0.25 versus q=0}
+    \label{fig:kdediff_pairwise_bhfdr_0.25}
+    \end{subfigure}
+~\begin{subfigure}{.27\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{{exp/pairwise_bernoulli_thresh/known_pair_confusion_matrix_compare_1C_0Q_simple_0.3Q_bhfdr}.png}
+    \caption{KDE over pairwise score differences for BH FDR thresholding at q=0.3 versus q=0}
+    \label{fig:kdediff_pairwise_bhfdr_0.3}
+    \end{subfigure}
+~\begin{subfigure}{.27\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{{exp/pairwise_bernoulli_thresh/known_pair_confusion_matrix_compare_1C_0Q_simple_0.4Q_bhfdr}.png}
+    \caption{KDE over pairwise score differences for BH FDR thresholding at q=0.4 versus q=0}
+    \label{fig:kdediff_pairwise_bhfdr_0.4}
+\end{subfigure}
+\end{figure}
+
+
+
+\subsection{Worst Case Loss}
+
+The approach to handle the worst case loss is as follows.
+We only want to incorporate coordinates that we predict are 
+useful for making decisions.  A coordinate $d$ is not useful
+for discriminating between models $c$ and $c'$ if there is
+a mixture of bernoulli random variables with proportions
+$\eta_c,\eta_{c'}$ and respective mixture weights $\pi,1-\pi$
+whose likelihood for the observed data in coordinate
+$d$ is reasonably large but for whom the expected loss exceeds
+some threshold.
+
+Formally, we construct a confidence region for the proportions
+and the mixture weights which is a joint confidence region
+for all three parameters.  Each of the confidence intervals
+are simply binomial proportion. There are a number of different
+confidence intervals to use, for example we could
+use the likelihood ratio interval inverted interval
+we will not use the Wald interval for reasons discussed in 
+Tony Cai's paper
+
+\subsection{Multiple Models}
+
+The case of mixture models is somewhat more complicated since
+we need to use weighted p-value tests since we don't know
+to which mixture component each data point belongs and
+we have to use that uncertainty.  Before we do the thresholding
+we first estimate several models $K_c$ for each class $c$.
+The linear classifiers are constructed between all pairs from
+different classes, i.e. we have a classifier $(\hat{w}_{c,k,c',k'},\hat{b}_{c,k,c',k'})$
+for every $1\leq k\leq K_c$, $1\leq k'\leq K_{c'}$ and every pair
+$c$,$c'$ of classes. The total number of classifiers is
+\begin{equation}
+\sum_{c=1}^{C-1} K_c \sum_{c'=c+1}^C K_{c'}
+\end{equation}
+which becomes very large for mixture models.
+
+
+
+\section{ Multiclass Pegasos}
+
+\subsection{Using Pegasos to finish estimation of Linear Classifiers}
+
+Based on \autoref{tab:comparison} the most successful method
+used an SVM to learn pairwise discrimination methods, however we
+found that training took a very long time.  In this section
+we consider an attempt to speed up training using a combination
+of generative estimation and the Pegasos SVM solver \cite{pegasos}.
+We are in the same setting with binary data coming from two class
+$c$ and $c'$ with $1\leq c<c'\leq C$. We denote the data
+from class $c$ as $X_c\in \{0,1\}^{N_c\times D}$ and
+the data from class $c'$ as $X_{c'}\in \{0,1\}^{N_{c'}\times D}$.
+We use simple averages to estimate naive Bayes models for
+both $\hat{\theta}_c \in (0,1)^D$ and $\hat{\theta}_{c'}\in(0,1)^D$ where
+\begin{equation}
+\hat{\theta}_j(d) \begin{cases}
+\frac{1}{N_j} \sum_{i=1}^{N_j} X(i,d) &  0 < \sum_{i=1}^{N_j} X(i,d) < N_j\\
+\frac{1}{2N_j} & \sum_{i=1}^{N_j} X(i,d) = 0\\
+1 - \frac{1}{2N_j} & \text{otherwise}
+\end{cases}
+\end{equation}
+for each coordinate $1\leq d\leq D$ and $j=c,c'$. We warm start
+our Pegasos solver with a linear classifier $(w,b)\in\mathbb{R}^D\times \mathbb{R}$ where
+\begin{align}
+w(d) =& \log \frac{\hat{\theta}_c(d)(1-\hat{\theta}_{c'}(d))}{\hat{\theta}_{c'}(d)(1-\hat{\theta}_{c}(d))}\\
+b =& \sum_{d=1}^D \log \frac{1-\hat{\theta}_c(d)}{1-\hat{\theta}_{c'}(d)}
+\end{align} 
+for each coordinate $1\leq d\leq D$.  With this warm start
+the solver converges quickly and we can estimate pairwise classifiers
+for all 1182 pairs of classes rapidly.  Our results show a small improvement results from doing this with a result of \input{exp/pegasos/leehon_confusion_matrix_dev_output_1C_Q.txt}.  One question is
+how the pegasos training changes the weight vectors and also
+what the change in the pairwise classification rate looks like.
+
+\subsection{Change in Pairwise Classification Rates}
+
+We use a similar technique as \autoref{sec:pairwise-results} to
+get the change in pairwise classification rates.  Namely, we constrct
+a matrix $M^{pegasos}$ where $M^{pegasos}(c,c')$ is the number of times
+the classifier $(w_{c,c'},b_{c,c'})$ (as estimated by Pegasos)
+classifies training data from class $c$ as coming from class
+$c'$ so it quantifies the non-oblivious pairwise loss. We note
+this is very different than the oblivious loss we compute
+in the standard classification procedure since we use all the pairwise
+classifier to vote whereas in this case we are focusing on a single
+pairwise classifier and just two classes.  The KDE plot shows a
+significant negative skew in \autoref{fig:kdediff_pairwise_1C_pegasos_60T_1000k_2l} which shows how Pegasos is able to significantly
+reduce the number of mistakes across many of the pairwise differences with some pairwise mistakes being reduced by a large amount.
+\begin{figure}[ht]
+
+    \centering
+    \includegraphics[scale=.5]{{exp/pegasos/known_pair_confusion_matrix_compare_1C_0Q_simple_1C_pegasos_60T_1000k_2l}.png}
+    \caption{KDE over pairwise mistake differences for Pegasos-trained warm-start classifier compared to pure warm-start classifier (naive Bayes for warm-start).  Notice the significant negative skew showing how Pegasos decreaseses the number of mistakes more than it increases them.}
+    \label{fig:kdediff_pairwise_1C_pegasos_60T_1000k_2l}
+\end{figure}
+
+
+\subsection{Changes in the weight vector}
+
+We now wish to analyze how Pegasos training modifies the weight
+vectors initialized using a naive Bayes procedure.  The first question
+to look at is whether there are any trends.  The first is whether
+there is an overall difference between the means of the two
+
+\section{Pegasos 1vRest with multiple components}
+
+Another iteration of these is to do a warm start with multiple
+components and then train one versus rest with preclustered data.
+The setup is as follows we have data pairs
+$\{(x_i,y_i)\}_{i=1}^N$ where $1\leq y_i\leq C$ for $1\leq i\leq N$.
+We have $x_i\in\{0,1\}^D$ for $1\leq i\leq N$.  Let $I_c$ denote
+the set of all indices $i$ such that $y_i = c$ then we can construct
+a class-specific data matrix $X_c\in \{0,1\}^{N_c\times D}$ where
+$N_c=|I_c|$.  The algorithm we use is a multi-class Pegasos
+\cite{multipegasos} where we estimate a matrix $W$ of class-specific
+weight vectors $(w_1,\ldots,w_c)^\top\in\mathbb{R}^{C\times D}$ so
+that the classifier $f$ learned is
+\begin{equation}
+f(x) = \underset{1\leq c\leq C}{\arg\max} w_c^\top x.
+\end{equation}
+Following \cite{multipegasos} we use a multiclass hinge loss
+$l\colon \mathbb{R}^{C\times D} \times \{0,1\}^D \times \{1,\ldots,C\}$
+\begin{equation}\label{eq:multiclass_hinge_loss}
+l(W,x,y) = \max\{ 0,1 + \max_{c\neq y} (w_c -w_y )^\top x\}
+\end{equation}
+where $y$ is the true underlying class of $x$. The multiclass
+SVM objective then is
+\begin{equation}
+P(W,\{(x_i,y_i)\}_{i=1}^N) = \frac{\lambda}{2}\|W\|_F^2 +\frac{1}{N}\sum_{i=1}^N l(W,x_i,y_i)
+\end{equation}
+where $\|\cdot\|_F$ is the Froebenius matrix norm.  The multi-class
+Pegasos works in rounds where there is first an update using the
+subgradient followed by a projection step.  In each round
+$t$ we minimize a stochastic objective
+\begin{equation}
+  P^{(t)}(W,\{(x_i,y_i)\}_{i\in I^{(t)}})=\frac{\lambda }{2}\|W\|^2_F +\frac{1}{K}\sum_{i\in I^{(t)}} l(W,x_i,y_i)
+\end{equation}
+where $I^{(t)}$ is a randomly chosen subset of size $K$ from $I_{y^{(t)}}$
+where $y^{(t)}$ is a randomly chosen class (according to class 
+frequency in the training data).  To minimize $P^{(t)}(W,\{x_i,y_i\}_{i\in I^{(t)}})$
+we take a single projected subgradient step of the form
+\begin{equation}\label{eq:pegasos_step}
+W^{(t+1)} = \Pi_{B(\lambda)}(W^{(t)} -\eta^{(t)}\nabla^{(t)})
+\end{equation}
+where $\Pi_{B(\lambda)}$ projects the data onto the ball
+\begin{equation}
+B(\lambda)=\left\{ w\colon \|w\| \leq \frac{1}{\sqrt{\lambda}}\right\},
+\end{equation}
+$\eta^{(t)}=1/(\lambda t)$ is the learning rate, and $\nabla^{(t)}\in\mathbb{R}^{C\times D}$
+is the sub-gradient matrix estimated from $P^{(t)}$. Due to the
+piecewise nature of the hinge loss we get the following potential
+subgradients for the row of $\nabla^{(t)}$ associated with class
+$c$ is
+\begin{equation}\label{eq:hinge_subgradient}
+\nabla^{(t)}_c = \begin{cases}
+\lambda W^{(t)}_c  & |I_c^{(t)}|=0\\
+\lambda W^{(t)}_c - \frac{1}{|I_c^{(t)}|}\sum_{i\in I_c^{(t)}} x_i & c =y^{(t)}\\
+\lambda W^{(t)}_c + \frac{1}{|I_c^{(t)}|}\sum_{i\in I_c^{(t)}} x_i & c \neq y^{(t)} 
+\end{cases}
+\end{equation}
+where $I_c^{(t)}$ is the subset of $I^{(t)}$ of training examples that contribute to the loss:
+\begin{equation}\label{eq:hinge_batch}
+I_c^{(t)} = \begin{cases}
+\left\{ x_i \in I^{(t)}\mid (w_c - w_{y^{(t)}})^\top x_i > -1,c=\underset{c'}{\arg\max}\; w_{c'}^\top x_i\right\} & c\neq y^{(t)}\\
+\left\{ x_i \in I^{(t)}\mid \underset{c'}{\arg\max}\;(w_{c'} - w_{y^{(t)}})^\top x_i > -1\right\} & c = y^{(t)}.
+\end{cases}
+\end{equation}
+Another possibility is to use the ramp loss which only uses those
+examples that contribute to a small amount of loss
+\begin{equation}\label{eq:ramp_batch}
+I_{c,ramp}^{(t)} = \begin{cases}
+\left\{ x_i \in I^{(t)}\mid 0 > (w_c - w_{y^{(t)}})^\top x_i > -1,c=\underset{c'}{\arg\max}\; w_{c'}^\top x_i\right\} & c\neq y^{(t)}\\
+\left\{ x_i \in I^{(t)}\mid 0 > \underset{c'}{\arg\max}\;(w_{c'} - w_{y^{(t)}})^\top x_i > -1\right\} & c = y^{(t)}.
+\end{cases}
+\end{equation}
+The projection $\Pi_{B(\lambda)}$ may then be performed as
+\begin{equation}\label{eq:pegasos-multiclass-projection}
+\Pi_{B(\lambda)}(W^{(t)}-\eta^{(t)}\nabla^{(t)}) = \min\left\{ 1,\frac{1/\sqrt{\lambda}}{\|W^{(t)}-\eta^{(t)}\nabla^{(t)}\|_F}\right\} (W^{(t)}-\eta^{(t)}\nabla^{(t)}).
+\end{equation}
+A summary of the algorithm in this case where we process a single example is given in
+\autoref{alg:pegasos-single-multiclass}
+\begin{algorithm}[t]
+\SetAlgoNoLine
+\KwIn{Data set $\mathcal{D}=\{(x,y)\}\subset \mathbb{R}^D\times [C]$, regularization parameter $\lambda > 0$, initial weight matrix $W\in\mathbb{R}^{C\times D}$, 
+number of rounds $T$, loss function $l(W,x,y)$}
+\KwOut{Weight matrix $W\in\mathbb{R}^{C\times D}$}
+\For{$t=1,2,\ldots,T$}{
+  Draw example $(x,y)$ uniformly at random from $\mathcal{D}$\;
+  $\eta \leftarrow \frac{1}{\lambda t}$\;
+  $W \leftarrow (1- \lambda\eta) W$\;
+  \If{ $l(W,x,y) > 0$}{
+    $c \leftarrow \arg\max_{c\neq y}(w_c - w_y)^\top x$\;
+    \tcc{Adjust the rows of $W$ contributing to the loss}
+    $w_c \leftarrow w_c - \eta x$\;
+    $w_y \leftarrow w_y + \eta x$\;
+   }
+  \tcc{Optional Projection Step}
+  $\left( W \leftarrow \min\left\{1,\frac{1/\sqrt{\lambda}}{\|W\|}\right\} W \right)\;
+
+}
+
+\caption{Multiclass Pegasos}
+\label{alg:pegasos-single-multiclass}
+\end{algorithm}
+
+
+
+
+\subsection{Pegasos For Mixture SVM}
+\label{sec:mixture-svm-pegasos}
+A common variant of the SVM is to include  latent variables
+as in the case of mixture of multivariate Bernoulli models.
+The extension to latent models means that the weight matrix
+$W$ has to accomodate weight vectors for the mixture components
+so $W\in \mathbb{R}^{(K_1+K_2+\cdots+K_C)\times D}$ where $K_c$ is the
+number of mixture components for class $c$.  We denote the
+rows of $W$ by $w_{c,k}$ where $1\leq k\leq K_c$ so that they
+are indexed by both a class and component. 
+
+We have to adjust our
+definition of the loss since 
+\autoref{eq:multiclass_hinge_loss} involves a comparison of
+the score for the true underlying class $y$ against the largest score
+for another class $c$ and if the true class has $K_y >1$ components
+then there is no unique score $w_y^\top x$ to compare against $w_c^\top x$. If we use the analogy to exponential-family models then
+$w_{y,k}^\top x$ may be interpreted as the log probability (possibly unnormalized if we omit the constant term) of $x$ under mixture
+$k$ for class $y$
+and if we have mixture weights
+$\pi_{y,k}$ for $1\leq k\leq K_y$ then the log-probability for class
+$y$ is
+\begin{equation}
+s_y(x) = \log \sum_{k=1}^{K_y} \pi_{y,k}\exp( w_{y,k}^\top x)
+\end{equation}
+which is approximately equal to $\max_{k} w_{y,k}^\top x$. The
+approximation is close as long
+as the mixture components are sufficiently different and each of
+the mixture weights is sufficiently close to uniform.
+We define a mixture component-compatible version
+of the multiclass hinge loss as
+\begin{equation}\label{eq:mixture_multiclass_hinge_loss}
+l(W,x,y) = \max\{0,1+\max_{c\neq y}\max_{1\leq k\leq K_c}\min_{1\leq k'\leq K_y}(w_{c,k}- w_{y,k'})^\top x\}
+\end{equation}
+where the $\min_{1\leq k'\leq K_y}$ ensure that we compare $w_{c,k}$
+against the strongest weight vector $w_{y,k'}$ for the true class
+$y$.  To minimize \autoref{eq:mixture_multiclass_hinge_loss}
+we use mini-batch stochastic gradient descent steps of the
+form \autoref{eq:pegasos_step}.  Optimization occurs in rounds
+where in round $t$ we randomly choose a class $y^{(t)}$ and we select
+a minibatch of examples $I^{(t)}$ from that class we also have an estimate
+for the weight matrix $W^{(t)}$ from the previous round. 
+The set $I^{(t)}$, in analogy to \autoref{eq:hinge_batch}, is further
+partitioned into class-component specific subsets
+$I^{(t)}_{c,k}$ where
+\begin{equation}\label{eq:hinge_component_batch}
+I_{c,k}^{(t)} = \begin{cases}
+\left\{ x_i \in I^{(t)}\mid \min_{1\leq k'\leq K_{y^{(t)}}}(w_{c,k} - w_{y^{(t)},k})^\top x_i > -1,\;(c,k)=\underset{(c_0,k_0) \colon 1\leq k_0\leq K_{c_0}}{\arg\max}\; (w_{c_0,k_0})^\top x_i\right\} & c\neq y^{(t)}\\
+\left\{ x_i \in I^{(t)}\mid \underset{\begin{subarray}{c}
+(c',k')\colon c'\neq y^{(t)}\\
+1\leq k'\leq K_{c'}\end{subarray}}{\arg\max}\;(w_{c',k'} - w_{y^{(t)},k})^\top x_i > -1,\; (w_{y^{(t)},k})^\top x_i = \max_{k''} (w_{y^{(t)},k''})^\top x_i\right\} & c = y^{(t)}.
+\end{cases}
+\end{equation}
+The definition of $I_{c,k}^{(t)}$ may be broken into some components:
+\begin{enumerate}
+\item Only those points which contribute to the loss are included, 
+so correctly classified examples away from the decision boundary
+are not included.
+\item If $c=y^{(t)}$ then $I_{c,k}^{(t)}$ contains those points $x_i\in I^{(t)}$ where
+$(w_{c,k})^\top x$ is larger than 
+$(w_{c,k'})^\top x$ for every other component $1\leq k'\leq K_y$.
+\item If $c\neq y^{(t)}$ then $(w_{c,k})^\top x$ is larger than $(w_{c',k'})^\top x$ for every
+other $(c',k')$ where $c'\neq y^{(t)}$.
+\end{enumerate}
+The above principles mean that we focus on the components and 
+classes that produce the largest impact on the hinge loss.
+We these sets to estimate the subgradient of
+\begin{equation}
+P(W,I^{(t)}) = \frac{\lambda}{2}\|W\|^2_F + \frac{1}{|I^{(t)}|}\sum_{i\in I^{(t)}} l(W,x_i,y_i)
+\end{eqution}
+taken at the currrent estimate of the weight matrix $W^{(t)}$.
+Denote by $\nabla^{(t)}$ this subgradient which is defined
+similarly as \autoref{eq:hinge_subgradient} but each
+row $\nabla^{(t)}_{c,k}$ corresponds to a class-component pair $(c,k)$
+(as are the rows of $W^{(t)}$) so that
+\begin{equation}
+\nabla^{(t)}_{c,k} = \begin{cases} \lambda W_{c,k}^{(t)} &  |I_{c,k}^{(t)}| = 0\\
+\lambda W_{c,k}^{(t)} - \frac{1}{|I_{c,k}^{(t)}|} \sum_{i\in I_{c,k}^{(t)}} x_i &  c = y^{(t)}\\
+\lambda W_{c,k}^{(t)} +  \frac{1}{|I_{c,k}^{(t)}|} \sum_{i\in I_{c,k}^{(t)}} x_i &  c\neq y^{(t)}.
+\end{cases}
+\end{equation}
+The projection step of the algorithm is the same as \autoref{eq:pegasos-multiclass-projection}. We present a version of the algorithm
+appropriate for handling a single example in \autoref{alg:pegasos-single-multiclass-multicomponent} where we assume that each class
+$c$ has $K$ components (although it is simple to modify the version
+where $K$ is allowed to vary across different classes)
+\begin{algorithm}[t]
+\SetAlgoNoLine
+\KwIn{Data set $\mathcal{D}=\{(x,y)\}\subset \mathbb{R}^D\times [C]$, regularization parameter $\lambda > 0$, initial weight matrix $W\in\mathbb{R}^{CK\times D}$, 
+number of rounds $T$, loss function $l(W,x,y)$}
+\KwOut{Weight matrix $W\in\mathbb{R}^{C\times D}$}
+\For{$t=1,2,\ldots,T$}{
+  Draw example $(x,y)$ uniformly at random from $\mathcal{D}$\;
+  $\eta \leftarrow \frac{1}{\lambda t}$\;
+  $W \leftarrow (1- \lambda\eta) W$\;
+  \If{ $l(W,x,y) > 0$}{
+    $k \leftarrow \arg\max_{1\leq k\leq K} w_{y,k}^\top x$\;
+    $c,k' \leftarrow \arg\max_{c\neq y,\; 1\leq k'\leq K}(w_{c,k'} - w_{y,k})^\top x$\;
+    \tcc{Adjust the rows of $W$ contributing to the loss}
+    $w_{c,k'} \leftarrow w_{c,y'} - \eta x$\;
+    $w_{y,k} \leftarrow w_{y,k} + \eta x$\;
+   }
+  \tcc{Optional Projection Step}
+  $\left( W \leftarrow \min\left\{1,\frac{1/\sqrt{\lambda}}{\|W\|}\right\} W \right)\;
+
+}
+
+\caption{Multiclass Multicomponent Pegasos}
+\label{alg:pegasos-single-multiclass-multicomponent}
+\end{algorithm}
+
+\subsubsection{Experimental Test of the Algorithm}
+
+We now attempt to run this on real data.  The first test is to
+consider the performance on a two-component classifier.  For this
+experiment rather than drawing randomly from the distribution
+we will run through the dataset twice for various settings of the
+$\lambda$ regularization parameter in order to properly choose the lambda parameter
+
+\begin{table}
+  \centering
+  \begin{tabular}{| c | c |  c |}
+    \hline
+    \lambda & Use Projection  & Error Rate \\ \hline\hline
+    27 & Yes & \input{exp/pegasos/leehon39_warm_train_pegasos_dev_10Ninit_2C_27lambda_Prj_error_rate.txt} \\ \hline
+    27 & No & \input{exp/pegasos/leehon39_warm_train_pegasos_dev_10Ninit_2C_27lambda_NoPrj_error_rate.txt} \\ \hline
+    9 & Yes & \input{exp/pegasos/leehon39_warm_train_pegasos_dev_10Ninit_2C_9lambda_Prj_error_rate.txt} \\ \hline
+    9 & No & \input{exp/pegasos/leehon39_warm_train_pegasos_dev_10Ninit_2C_9lambda_NoPrj_error_rate.txt} \\ \hline
+    3 & Yes & \input{exp/pegasos/leehon39_warm_train_pegasos_dev_10Ninit_2C_3lambda_Prj_error_rate.txt} \\ \hline
+    3 & No & \input{exp/pegasos/leehon39_warm_train_pegasos_dev_10Ninit_2C_3lambda_NoPrj_error_rate.txt} \\ \hline
+    1/3 & Yes & \input{exp/pegasos/leehon39_warm_train_pegasos_dev_10Ninit_2C_0.333333lambda_Prj_error_rate.txt} \\ \hline
+    1/3 & No & \input{exp/pegasos/leehon39_warm_train_pegasos_dev_10Ninit_2C_0.333333lambda_NoPrj_error_rate.txt} \\ \hline
+    1/9 & Yes & \input{exp/pegasos/leehon39_warm_train_pegasos_dev_10Ninit_2C_0.111111lambda_Prj_error_rate.txt} \\ \hline
+    1/9 & No & \input{exp/pegasos/leehon39_warm_train_pegasos_dev_10Ninit_2C_0.111111lambda_NoPrj_error_rate.txt} \\ \hline
+    1/27 & Yes & \input{exp/pegasos/leehon39_warm_train_pegasos_dev_10Ninit_2C_0.037037lambda_Prj_error_rate.txt} \\ \hline
+    1/27 & No & \input{exp/pegasos/leehon39_warm_train_pegasos_dev_10Ninit_2C_0.037037lambda_NoPrj_error_rate.txt} \\ \hline
+    1/81 & Yes & \input{exp/pegasos/leehon39_warm_train_pegasos_dev_10Ninit_2C_0.0123457lambda_Prj_error_rate.txt} \\ \hline
+    1/81 & No & \input{exp/pegasos/leehon39_warm_train_pegasos_dev_10Ninit_2C_0.0123457lambda_NoPrj_error_rate.txt} \\ \hline
+    1/243 & Yes & \input{exp/pegasos/leehon39_warm_train_pegasos_dev_10Ninit_2C_0.00411523lambda_Prj_error_rate.txt} \\ \hline
+    1/243 & No & \input{exp/pegasos/leehon39_warm_train_pegasos_dev_10Ninit_2C_0.00411523lambda_NoPrj_error_rate.txt} \\ \hline
+  \end{tabular}
+  \caption{Error rates for various settings of $\lambda$ in the multicomponent Crammer-Singer Pegasos with and without projection run for $2T=280450$ iterations}
+  \label{tab:2-component-pegasos-crammer-singer}
+\end{table}
+
+
+\subsection{Regularization}
+  
+We note that the regularization of the weight vectors in pairwise training
+versus one-versus-rest multiclass training is very different.  The weight
+vectors in pairwise training $w_{c,c'}$ correspond to differences
+between the one-versus-rest weight vectors $w_c-w_{c'}$. Thus,
+the penalty in pairwise estimation has a different meaning--we
+suspect that this may be leading to the discrepancy in performance.
+In a recent paper on Pegasos \cite{pegasos11} the authors note
+that including the projection step did not change their results
+very much so in this work we will experiment with the multiclass
+Pegasos both with and without the projection step.
+
+A projection step for the multiclass Pegasos that constrains
+pairwise differences would be more involved.  Rather than working
+on the weight matrix $W\in\mathbb{R}^{C\times D}$ the regularization
+operates on a pairwise difference matrix
+\begin{equation}\label{eq:pegasos-pairwise-regularize-matrix}
+V\in\mathbb{R}^{ (K_1K_{-1}+K_2K_{-2}+\cdots+K_{C-1}K_{1-C}) \times D}\qquad v_{c,k,c',k'} = w_{c,k} - w_{c',k'}
+\end{equation}
+where $K_c$ is, as in \autoref{sec:mixture-svm-pegasos}, the
+number of mixture components in class $c$ where $1\leq c\leq C$
+and $K_{-c}=\sum_{i=1}^{C-c} K_{c+i}$ is the number of pairings between
+components in class $c$ can have with classes $c+i$ where $i>0$,
+by convention we let $K_{-C}=0$.  The definition in \autoref{eq:pegasos-pairwise-regularize-matrix}
+can be straightforwardly applied to the standard multiclass
+setup where $K_c=1$ for every $1\leq c\leq C$ so
+\begin{equation}
+K_1K_{-1}+K_2K_{-2}+\cdots+K_{C-1}K_{1-C} = C\choose 2
+\end{equation}
+and more generally $K_1K_{-1}+K_2K_{-2}+\cdots+K_{C-1}K_{1-C}$ is
+precisely the number of pairings between components coming from
+different classes.  The appropriate regularization for
+$V$ is difficult to choose but a simple projection step that will
+not change the detection decisions is to just use the
+Frobenius norm which means the projection step is a
+simple scaling of the entire vector. 
+
+\subsubsection{Regularizing weight differences}
+
+In the standard multiclass SVM setting \cite{Crammer01}
+the loss is computed as
+\begin{equation}
+l(W,x,y) = \max\{0,1 -\max_{c\neq y} (w_c - w_y)^\top x\}
+\end{equation}
+so we are computing a maximum over differences between the weight
+vectors.  In the case of the multi-component multiclass
+SVM we use a saddlepoint
+\begin{equation}
+l(W,x,y) = \max\{0,1 -\max_{c\neq y\colon 1\leq k\leq K_c}\max_{1\leq k'\leq K_y} (w_{c,k} - w_{y,k'})^\top x\}
+\end{equation}
+so the relevant quantity for the prediction loss is a difference of weight vectors
+rather than the weight vectors themselves--this reflects the fact that 
+we care about the relative maxima over a set of predictors rather than
+an actual fixed maximum. One consequence of this is that
+$\|w_c\|^2$ may be large for every class $c$ but
+$\|w_c-w_{c'}\|^2$ could be small if the vectors are highly correlated, i.e.
+there are many irrelevant features that are shared across different weight
+vectors.  Observe that 
+\begin{equation}
+\|w_c-w_{c'}\|^2 = \|w_c\|^2 + \|w_{c'}\|^2 - 2w_c^\top w_{c'}
+\end{equation}
+so that if $w_c$ and $w_{c'}$ have a high degree of negative correlation 
+(and are very high dimensional) then
+$\|w_c-w_{c'}\|^2$ could be much larger than $\|w_c\|^2 + \|w_{c'}\|^2$, which
+would mean that small changes in a datum $\|x\|$ could cause very large
+changes in the prediction which means that the SVM algorithm would
+lose some of its robustness guarantee.  Additionally, if there are many
+features in class $c$ that correlate with features in class $c'$
+then we can allow $w_c$ and $w_{c'}$ to be large in those areas 
+(perhaps allowing them to better discriminate against a third class
+$c''$) without receiving a large penalty, in a certain sense large values
+in the weight vectors $W$ will only be penalized if they contribute to
+a variance in the prediction.  Correlated feature vectors in the multiclass
+case essentially means you count information against yourself more than you'll
+actually use it.
+  The 
+authors argue that it is impractical to use this regularization
+however we respectfully disagree and optimization can be done
+efficiently.
+
+\subsection{Pegasos Regularizing Difference of Weight Vectors}
+
+We consider the problem of regularizing the difference of
+weight vectors rather than the weight vectors themselves
+where the weight vectors have been given a warm start.  In this
+section we will consider the multiple component case and
+we will present the algorithm only for the case where we
+see a single example used in the optimization.
+
+For the purposes of a somewhat cleaner presentation we assume
+that each class $c\in [C]$ has a fixed number $K$ of mixture 
+components. Let $M=\frac{(CK)^2}{2}$ and $V\in \mathbb{R}^{M\times D}$ denote the matrix of weight
+vector differences where $C$ is the number of phone class and
+$K$ is the number of components per class so that
+for $1\leq c\leq c'\leq C$ and $1\leq k, k'\leq C$ (we restrict
+$k\leq k'$ in the case where $c=c'$) we have
+a unique index $i(c,k,c',k')$ such that row $i(c,k,c',k')$ of
+$V$ is defined as
+\begin{equation}
+  v_{c,k,c',k'} = w_{c,k} - w_{c',k'}.
+\end{equation}
+Formally we denote by $\mathcal{P}$ the set of all indices
+$(c,k,c',k')$ satisfying 
+\begin{align}
+& 1\leq c\leq c' \leq C\\
+& 1\leq k,k'\leq K\\
+&\begin{cases}
+ k< k' & c=c'\\
+ \text{no restriction} & c\neq c'.
+\end{cases}
+\end{align}
+Note that we could have defined $V$ using $M'= {CK\choose 2}$
+which would eliminate the zero rows of $V$ corresponding to indices
+$i(c,k,c,k)$.  Doing so would mean that $V$ would have fewer rows
+but it would not change the norm $\|V\|$ since norms are invariant
+to zero rows.  We find this definition of $V$ with zero rows
+produces a simpler algorithm in the primal case.
+
+The form of our algorithm is the same: minimize a loss and a norm
+on $V$ (corresponding to a complexity constraint). The choice
+of norm has a large impact on the algorithm and its not entirely
+clear what the norm on $V$ should be.  One of the primary functions
+of the norm is to improve robustness to small changes in the
+data so that if $x\in\mathbb{R}$ then 
+\begin{equation}
+f(W,x) = \max_{c\neq c',k}\min_{c',k'}(w_{c,k}-w_{c',k'})^\top x 
+\end{equation}
+is our raw classifier output and we want to put a Lipshitz condition
+on our classifier function so that
+\begin{equation}
+|\max_{c\neq c',k}\min_{c',k'}(w_{c,k}-w_{c',k'})^\top \delta | = |f(W,x) - f(w,x+\delta)|\leq \kappa \|\delta\|
+\end{equation}
+for some norm on $\delta$ thus we want a condition of the form
+\begin{equation}\label{eq:lipschitz-multicomponent-svm}
+\max_{\|\delta\|\leq 1} |\max_{c\neq c',k}\min_{c',k'}(w_{c,k}-w_{c',k'})^\top \delta | \leq \kappa.
+\end{equation}
+Observe that this is equivalent to the condition 
+\begin{equation}
+\max_{\|\delta\|\leq 1} |\max_{c\neq c',k}\min_{c',k'}(w_{c,k}-w_{c',k'})^\top \delta |^2 \leq \kappa^2
+\end{equation}
+and that
+\begin{equation}
+\max_{\|\delta\|\leq 1} |\max_{c\neq c',k}\min_{c',k'}(w_{c,k}-w_{c',k'})^\top \delta |^2 \leq \max_{\|\delta\|\leq 1} \sum_{c,k,c',k'} | (w_{c,k}-w_{c',k'})^\top \delta |^2 = \|V\|_2^2
+\end{equation}
+so that $\|V\|_2^2\leq \kappa^2$ guarantees
+the condition in \autoref{eq:lipschitz-multicomponent-svm}. We will
+consider this norm for the moment because of the ease with which
+regularization is handled, however, we will consider other possibilities in the coming section.
+
+The objective function is then
+\begin{equation}
+P_{all}(W) = \frac{\lambda}{2}\|V(W)\|^2 + \frac{1}{N}\sum_{n=1}^N l(W,x_n,y_n)
+\end{equation}
+where $l(W,x,y)$ is the multi-component multi-class hinge loss 
+described in \autoref{eq:mixture_multiclass_hinge_loss}. In order
+to compute the stochastic subgradient of $w_{c,k}$ we must compute
+the partial derivative of $\|V\|_2^2$ taken with respect to
+$w_{c,k}$
+\begin{align}
+\frac{\partial}{\partial w_{c,k}} \frac{1}{2}\|V\|_2^2 =&  \frac{1}{2}\sum_{(c',k',c'',k'')\in\mathcal{P}} \frac{\partial}{\partial w_{c,k}} \|w_{c',k'} -w_{c'',k''}\|^2\\
+=& \frac{1}{2}\sum_{(c,k,c',k')\in\mathcal{P}} 2w_{c,k} -2w_{c',k'}\\
+=& M w_{c,k} - \sum_{c',k'} w_{c',k'}
+\end{align}
+so that while $\|V\|_2^2$ may be complicated to explicitly compute
+its partial derivative is very simple. The potential subgradients
+are then
+\begin{equation}
+\partial_{w_{c,k}}P(W) = \begin{cases}
+\lambda \left(Mw_{c,k} - \sum_{c',k'} w_{c,k}\right) - x & c=y,\; k=\arg\max_{k'} w_{y,k}^\top x\\
+\lambda \left(Mw_{c,k} - \sum_{c',k'} w_{c,k}\right) + x & (c,k) = \underset{(c',k')\colon c\neq y}{\arg\max} w^\top x\\
+\lambda \left(Mw_{c,k} - \sum_{c',k'} w_{c,k}\right) & \text{otherwise}.
+\end{cases}
+\end{equation}
+
+We now need to work out the projection step of the algorithm. The
+projection amounts to solving the problem
+\begin{align}\label{eq:l2difference-projection-objective}
+&\min_{U} \frac{1}{2}\|W - U\|^2_2\\
+&\text{s.t.}\; \frac{1}{2}\|V(U)\|^2_2\leq \kappa.
+\end{align}
+The Lagrangian is then
+\begin{equation}
+\mathcal{L}(U,\lambda) = \frac{1}{2}\|W - U\|^2_2 + \lambda\left(\sum 
+\frac{1}{2}\|u_{c,k} - u_{c',k'}\|^2_2 -\kappa\right)
+\end{equation}
+so that
+\begin{align*}
+\frac{\partial}{\partial u_{c,k}} \mathcal{L}(U,\lambda) =& u_{c,k}-w_{c,k}
+ +\lambda \left( Mu_{c,k} - \sum_{c',k'} u_{c',k'} \right)\\
+=& (1+\lambda(M-1))u_{c,k} - \lambda\sum_{(c',k')\neq (c,k)} u_{c',k'} -w_{c,k}.
+\end{align*}
+So that by the first order conditions
+\begin{equation}
+(1+\lambda(M-1))u_{c,k} - \lambda\sum_{(c',k')\neq (c,k)} u_{c',k'} =w_{c,k}
+\end{equation}
+which implies that 
+\begin{equation}\label{eq:first_attemp_uck}
+u_{c,k} = \frac{ w_{c,k} + \lambda \sum_{c',k'} w_{c',k'}}{ 1 + \lambda M }.
+\end{equation}
+We note that
+\begin{align*}
+\|V(\frac{1}{1+\lambda M}(W + \lambda W_{sums}))\|^2
+=& \sum_{(c,k,c',k')\in\mathcal{P}} \|u_{c,k} - u_{c',k'} \|^2\\
+=& \sum_{(c,k,c',k')\in\mathcal{P}} \frac{1}{(1+\lambda M)^2}\|w_{c,k} - w_{c',k'} \|^2\\
+=& \frac{1}{(1+\lambda M)^2} \|V(W)\|^2
+\end{align*}
+so the condition that
+\begin{equation}
+\frac{1}{2}\|V(U)\|^2 \leq \kappa
+\end{equation}
+is equivalent to
+\begin{equation}\label{eq:difference-projection-lambda}
+\frac{1}{2(1+\lambda M)^2} \|V(W)\|^2 \leq \kappa.
+\end{equation}
+Clearly, if $\|V(W)\|^2 \leq 2 \kappa$ then the objective in \autoref{eq:l2difference-projection-objective}
+ (which is always non-negative)
+is minimized with $U=W$ since the value of the problem would be
+zero and in that case $\lambda =0$. Otherwise if $\|V(W)\|^2 > 2\kappa$ then clearly $\lambda>0$
+to satisfy \autoref{eq:difference-projection-lambda}
+so by complementary slackness 
+\begin{equation}
+\frac{1}{2(1+\lambda M)^2} \|V(W)\|^2 = \frac{1}{2}\|V(U)\|^2 = \kappa
+\end{eqation}
+so 
+\begin{equation}
+\lambda = \sqrt{\frac{\|V(W)\|^2}{2\kappa M^2}}-\frac{1}{M}
+\end{equation}
+which means that \autoref{eq:first_attemp_uck}
+we get
+\begin{equation}\label{eq:u_ck-projection-value}
+u_{c,k} = \frac{\sqrt{2\kappa}}{\|V(W)\|}\left[w_{c,k} + \left(\sqrt{\frac{\|V(W)\|^2}{2\kappa M^2}}-\frac{1}{M}\right) \sum_{c',k'} w_{c',k'}\right].
+\end{equation}
+Having worked out the projection step we can now summarize the
+steps in \autoref{alg:pegasos-single-multiclass-multicomponent-diff-regularized}.
+\begin{algorithm}[t]
+\SetAlgoNoLine
+\KwIn{Data set $\mathcal{D}=\{(x,y)\}\subset \mathbb{R}^D\times [C]$, regularization parameter $\lambda > 0$, initial weight matrix $W\in\mathbb{R}^{CK\times D}$, 
+number of rounds $T$, loss function $l(W,x,y)$, weight difference function $V$}
+\KwOut{Weight matrix $W\in\mathbb{R}^{C\times D}$}
+\For{$t=1,2,\ldots,T$}{
+  Draw example $(x,y)$ uniformly at random from $\mathcal{D}$\;
+  $\eta \leftarrow \frac{1}{\lambda t}$\;
+\tcc{Denote by $\mathbf{1}$ the vector of all ones}
+  $W \leftarrow W - \lambda\eta \left(MW - \sum_{c,k} w_{c,k}\mathbf{1}^\top\right)$\;
+  \If{ $l(W,x,y) > 0$}{
+    $k \leftarrow \arg\max_{1\leq k\leq K} w_{y,k}^\top x$\;
+    $c,k' \leftarrow \arg\max_{c\neq y,\; 1\leq k'\leq K}(w_{c,k'} - w_{y,k})^\top x$\;
+    \tcc{Adjust the rows of $W$ contributing to the loss}
+    $w_{c,k'} \leftarrow w_{c,y'} - \eta x$\;
+    $w_{y,k} \leftarrow w_{y,k} + \eta x$\;
+   }
+  \tcc{Optional Projection Step}
+  \If{ $\|V(W)\|^2 > \frac{1}{\lambda}$}{
+    $W = \frac{1}{\|V(W)\|\sqrt{\lambda}}W + \frac{\|V(W)\|\sqrt{\lambda}-1}{M\|V(W)\|\sqrt{\lambda}} \sum_{c,k} w_{c,k}\mathbf{1}^\top $
+
+    }
+}
+
+\caption{Multiclass Multicomponent Weight Difference Regularized Pegasos}
+\label{alg:pegasos-single-multiclass-multicomponent-diff-regularized}
+\end{algorithm}
+
+
+
+\subsection{Likelihood Model}
+\begin{enumerate}
+\item the log-odds ratio interpretation of weight vectors
+\item the difference for different types of regularization and modeling context 
+\end{enumerate}
+
+Another ambiguity is what to do in the case where the two
+best models for the data all come from a common class so that
+$w_{y,k}^\top x$ and $w_{y,k'}^\top x$ are the largest scores, in that
+case we only consider the larger, $w_{y,k_*}^\top x$, and compare
+it to the scores from the other classes, thus, each examp
+
+
+\subsection{Max-min Regularization}
+
+\subsection{Binary Regularization}
+
+
+\section{Mixture of Multivariate Bernoulli Models with Pegasos Training}
+
+
+\section{Parts Model Versus Multivariate Bernoulli Models}
+
+
+\section{Hand-designed Parts for Tracking Formants}
+
+\section{Subspace Mixture of Bernoullis}
+
+We extend the model from Povey to mixtures of multivariate Bernoullis
+
+\section{Comparing Generative and Discriminative classifiers}
+
+%%%
+%
+% TODO!!!!!!!!!!!!!
+%
+Things to discuss
+\begin{enumerate}
+\item how performace differs in terms of average performance per phone class
+\item how the weight vectors differ in terms of the supports
+\item show the difference in what is driving detection decisions between the two
+\end{enumerate}
+
+One striking difference between generative and discriminative
+classifiers is that discriminative classifiers trained with
+regularization tend to zero out coordinates that are not useful
+for classification.  This can be seen in the following plots:
+short syllables
+
+\bibliographystyle{plain}
+\bibliography{../bibliography}
 
 
 \end{document}
