@@ -1581,6 +1581,55 @@ done
 # compute the errors in a form that can be compared
 \end{verbatim}
 
+\section{Hierarchical Classification}
+
+We begin with a simple model for hierarchical classification
+starting with the script \texttt{local/clusteralldata.py}
+which outputs clusters learned over all the edge image features
+the files gained are
+\begin{verbatim}
+exp/bmm_hierarchy/all_class_clusters_${c}c.npy
+exp/bmm_hierarchy/all_class_means_${c}c.npy
+exp/bmm_hierarchy/all_class_responsibilities_${c}c.npy
+exp/bmm_hierarchy/all_class_weights_${c}.npy
+\end{verbatim}
+where \texttt{\$\{c\}} ranges over \texttt{9,15,20,25,35,48,60}
+and hence gives a picture of unsupervised clustering of the phones.
+Experimenting with more clusters may be worthwhile dependening
+on what occurs.  An important check is to see whether these clusters
+correlate well with the true classes of the phones.
+
+To do this we construct a very simple confusion matrix where we compute a distribution over how often a given phone class appears within
+a given cluster class and then compute the entropy between those
+two distributions. The botom of \textt{local/clusteralldata.py}
+computes a graph and visual representation that shows the 
+$P(\theta=i\mid y=j)$
+where $\theta$ is the latent class given by the mixture model
+and $y$ is the true phone class.  So we found the KL divergence
+$D(P(\theta\mid y=j) || P(\theta\mid y=i))$ and computed a graph
+using the Reverse Cuthill Mckee Ordering to better show the 
+graph.
+
+The next step is to train the class-specific models based on the
+learned clusters.
+\begin{verbatim}
+dir=`pwd`
+conf=$dir/conf
+exp=$dir/exp/bmm_hierarchy
+data=$dir/data/local/data
+
+rm -f $exp/datalist
+for phn in `cat $data/phone.list` ; do
+  echo $phn $data/${phn}_train_examples.npy >> $exp/datalist
+done
+
+python local/train_hierarchy.py --config $conf/main.config\
+    --responsibilities $exp/all_class_responsibilities_9c.npy\
+    --phones $data/phone.list\
+    --datalist $exp/datalist
+
+\end{verbatim}
+
 \section{Looking at the Hard Comparisons}
 
 
