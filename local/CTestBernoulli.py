@@ -29,6 +29,7 @@ def main(args):
     component_ids = []
     for t_id, tpath in enumerate(args.templates):
         class_templates = np.load(tpath)
+        print class_templates.shape
         class_templates = class_templates.reshape(
             class_templates.shape[0],
             np.prod(class_templates.shape[1:]))
@@ -64,9 +65,17 @@ def main(args):
     num_true = 0
     for data_id, data_path in enumerate(args.data):
         print data_id,data_path
-        data = np.load(data_path)
+        if args.use_feature_indices is not None:
+            data = np.load(data_path)[:,:,:,args.use_feature_indices]
+        else:
+            data = np.load(data_path)
+
+        if args.nfreqs is not None:
+            data =data[:,:,:args.nfreqs]
+
         data_shape = data.shape[1:]
         data = data.reshape(len(data),np.prod(data.shape[1:]))
+
         scores = np.dot(data,log_odds) + constants
 
         scores_for_class = scores[:,np.arange(len(class_ids))[class_ids==data_id]]
@@ -220,7 +229,7 @@ def main(args):
 
         confusions = np.bincount(class_ids[max_ids],minlength=num_models)
         confusion_matrix[data_id] += confusions
-        assert data_id in np.argsort(confusion_matrix[data_id])[-5:]
+        # assert data_id in np.argsort(confusion_matrix[data_id])[-5:]
         print num_true/num_data
 
     leehon_confusion_matrix = np.dot(leehon_matrix.T,
@@ -312,5 +321,6 @@ if __name__=="__main__":
     parser.add_argument('--phn_ids',
                         type=str,
                         help='path to the file containing the identities for each of the phones')
-
+    parser.add_argument('--use_feature_indices',default=None,type=int,nargs='*',help='indices to use in the last dimenion')
+    parser.add_argument('--nfreqs',default=None,type=int,help='indices to use for frequences')
     main(parser.parse_args())
