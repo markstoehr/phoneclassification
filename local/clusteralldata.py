@@ -1,8 +1,8 @@
 from __future__ import division
-from amitgroup.stats import bernoullimm
+from src import bernoullimm
 import numpy as np
 
-rootdir='/var/tmp/stoehr/phoneclassification'
+rootdir='/home/mark/Research/phoneclassification'
 confdir='%s/conf'%rootdir
 datadir='%s/data/local/data' % rootdir
 expdir='%s/exp/bmm_hierarchy' % rootdir
@@ -25,7 +25,12 @@ for phone_id, phone in enumerate(leehon[:,0]):
     curobs += nobs[phone_id]
 
 
-bmm=bernoullimm.BernoulliMM(n_components=9,n_iter=100,n_init=5,verbose=True,float_type=np.float32,blocksize=8000)
+means_ = np.load('%s/all_class_means_9c.npy' % expdir)
+weights_ = np.load('%s/all_class_weights_9c.npy' % expdir)
+
+bmm=bernoullimm.BernoulliMM(n_components=9,n_iter=100,n_init=1,verbose=True,float_type=np.float32,blocksize=8000,init_params='')
+bmm.means_ = means_
+bmm.weights_ = weights_
 bmm.fit(X)
 
 np.save('%s/all_class_means_9c.npy' % expdir,bmm.means_)
@@ -52,4 +57,44 @@ for n_components in [15,20,25,35,48,60]:
 
 
 
+n_components=9
+phoneclass_bclass_counts = np.zeros((len(leehon),n_components),dtype=int)
 
+for pclass_id in xrange(len(leehon)):
+    phoneclass_bclass_counts[pclass_id] = responsibilities[y==pclass_id].sum(0)
+
+
+freqs = (phoneclass_bclass_counts + .5) / np.lib.stride_tricks.as_strided(phoneclass_bclass_counts.sum(1),phoneclass_bclass_counts.shape,strides=(8,0))
+log_freqs = np.log(freqs)
+KLdivs = np.zeros((len(leehon),len(leehon)))
+
+for pclass_id1 in xrange(len(leehon)):
+    for pclass_id2 in xrange(len(leehon)):
+        KLdivs[pclass_id1,pclass_id2] = np.sum(freqs[pclass_id1]*(log_freqs[pclass_id1] - log_freqs[pclass_id2]))
+
+import networkx as nx
+from networkx.utils import reverse_cuthill_mckee_ordering
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+
+KLdivs_sparse=np.exp(-KLdivs)
+threshold=.6
+KLdivs_sparse[KLdivs_sparse < threshold] = 0
+G = nx.Graph(KLdivs_sparse)
+rcm = list(reverse_cuthill_mckee_ordering(G))    
+
+title='KL D(p||q) map 9 classes'
+figsize=6
+plt.close('all')
+plt.figure(figsize=(figsize,figsize))
+plt.imshow(-(1+np.clip((np.exp(-KLdivs[rcm]).T)[rcm].T,0,2)),
+               interpolation='nearest',
+               cmap='hot')
+
+plt.grid()
+plt.xticks(np.arange(len(rcm)),leehon[:,0][rcm])
+plt.yticks(np.arange(len(rcm)),leehon[:,0][rcm])
+plt.xlabel('p')
+plt.ylabel('q')
+plt.title(title)
+plt.savefig('%s/rcm_kl_div_9c.png' % expdir,bbox_inches='tight')
