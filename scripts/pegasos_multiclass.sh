@@ -4,6 +4,8 @@ utils=`pwd`/utils
 conf=`pwd`/conf
 old_exp=`pwd`/exp/pairwise_bernoulli_thresh
 exp=`pwd`/exp/pegasos
+scripts=`pwd`/scripts
+pegasos_local=$scripts/pegasos_local
 mkdir -p $exp
 mkdir -p $conf
 
@@ -123,3 +125,46 @@ python $local/estimate_all_models.py --phones $datadir/phone.list\
     -v
 done
 
+# now running pegasos
+rm -f $exp/train_2C_warm_pegasos_avgs_meta_fl
+for lambda_power in `seq 4 -1 -5` ; do
+   lambda=`echo "" | awk "END { print (3.0)^($lambda_power) }"`
+   for do_projection in True False ; do
+       for regularize_diffs in True False ; do
+           echo 2C_${lambda}lambda_${do_projection}Prj_${regularize_diffs}RD avgs_2C.npy meta_2C.npy $lambda $do_projection $regularize_diffs >> $exp/train_2C_warm_pegasos_avgs_meta_fl
+       done
+    done
+done
+
+python $pegasos_local/multicomponent_simple_pegasos_train.py --rootdir /home/mark/Research/phoneclassification \
+    --confdir conf\
+    --datadir data/local/data\
+    --expdir exp/pegasos\
+    --leehon_phones phones.48-39\
+    --train_data_suffix train_examples.npy\
+    --nrounds_multiplier 2\
+    --avgs_meta_list_fl train_2C_warm_pegasos_avgs_meta_fl\
+    --save_prefix warm_train_pegasos\
+    --save_suffix .npy
+
+
+rm -f $exp/train_21C_warm_pegasos_avgs_meta_fl
+for lambda_power in `seq 3 -1 -5` ; do
+   lambda=`echo "" | awk "END { print (3.0)^($lambda_power) }"`
+   for do_projection in True False ; do
+       for regularize_diffs in False ; do
+           echo 21C_${lambda}lambda_${do_projection}Prj_${regularize_diffs}RD avgs_21C.npy meta_21C.npy $lambda $do_projection $regularize_diffs >> $exp/train_21C_warm_pegasos_avgs_meta_fl
+       done
+    done
+done
+
+python $pegasos_local/multicomponent_simple_pegasos_train.py --rootdir /home/mark/Research/phoneclassification \
+    --confdir conf\
+    --datadir data/local/data\
+    --expdir exp/pegasos\
+    --leehon_phones phones.48-39\
+    --train_data_suffix train_examples.npy\
+    --nrounds_multiplier 4\
+    --avgs_meta_list_fl train_21C_warm_pegasos_avgs_meta_fl\
+    --save_prefix warm_train_pegasos\
+    --save_suffix .npy
