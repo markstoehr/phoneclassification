@@ -134,7 +134,7 @@ def multiclass(Y,X,T,l,W,start_t=1,loss_computation=0,
 
 
 def multiclass_minibatch(Y,X,T,l,k,W,start_t=1,loss_computation=0,
-               return_avg_W,verbose=False,loss='hinge',
+               return_avg_W=True,verbose=False,loss='hinge',
                do_projection=False):
     """
     A multiclass implementation of the Pegasos
@@ -184,7 +184,7 @@ def multiclass_minibatch(Y,X,T,l,k,W,start_t=1,loss_computation=0,
     k = min(X.shape[0],k)
     use_example_ids = np.random.randint(0,X.shape[0],size=(T,))
     n_classes = max(W_classes[:,0].max()+1,Y.max()+1)
-    class_masks = np.zeros((n_classes, W_init
+    class_masks = np.zeros((n_classes, W_init.shape[0]))
 
 def multiclass_weird_update(Y,X,T,l,k,W_init,W_classes,start_t=100,v=False,loss='hinge',
                do_projection=True,verbose=True):
