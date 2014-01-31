@@ -88,7 +88,7 @@ def multiclass(Y,X,T,l,W,start_t=1,loss_computation=0,
     class_masks = np.eye(n_classes)
     init_W = W.copy()
     avg_W_update = np.zeros(W.shape)
-    new_W = W.copy()
+    new_W_delta = W.copy()
 
     oneoversqrtlambda = 1/np.sqrt(l)
     loss_list = []
@@ -105,19 +105,24 @@ def multiclass(Y,X,T,l,W,start_t=1,loss_computation=0,
         not_class_best_score = scores[not_class_best_score_id]
 
         scaling = 1./max(1,t+start_t)
-        new_W -= scaling * W
+        new_W_delta = - scaling * W
         if (loss=='hinge' and true_class_best_score - not_class_best_score < 1) or (loss=='ramp' and abs(true_class_best_score - not_class_best_score) < 1):
             eta = scaling/l
-            new_W[y] += eta*X[example_id]
-            new_W[not_class_best_score_id] -= eta*X[example_id]
+            new_W_delta[y] += eta*X[example_id]
+            new_W_delta[not_class_best_score_id] -= eta*X[example_id]
+        
+        if return_avg_W:
+            avg_W_update += (new_W_delta - avg_W_update)/(t+1)
 
+        W += new_W_delta
+            
         if do_projection:
             if type(do_projection) == int:
                 if t % do_projection != 0: continue
 
-            W_norm = np.linalg.norm(new_W)
+            W_norm = np.linalg.norm(W)
             if W_norm == 0:
-                return_tuple = (new_W,)
+                return_tuple = (W,)
                 if return_avg_W:
                     return_tuple += (init_W + avg_W_update,)
                 if return_loss:
@@ -126,11 +131,9 @@ def multiclass(Y,X,T,l,W,start_t=1,loss_computation=0,
                     return_tuple += (avg_W_loss_list,)
                 return return_tuple
             scaling = oneoversqrtlambda/W_norm
-            new_W *= min(1,scaling)
+            W *= min(1,scaling)
 
-        if return_avg_W:
-            avg_W_update += ((new_W - W) - avg_W_update)/(t+1)
-
+        
         # compute the zero-one loss to check for convergence
         if loss_computation > 0 and (t % loss_computation == 0):
             loss_list.append((t,(np.dot(X,W.T).argmax(1) == Y).sum() / X.shape[0]))
@@ -140,9 +143,8 @@ def multiclass(Y,X,T,l,W,start_t=1,loss_computation=0,
                 avg_W_loss_list.append((t, (np.dot(X,(init_W+avg_W_update).T).argmax(1) == Y).sum() / X.shape[0]))
                 print "round %d: loss avgW=%g" % (t, avg_W_loss_list[-1][-1])
 
-        W[:] = new_W[:]
 
-    return_tuple = (new_W,)
+    return_tuple = (W,)
     if return_avg_W:
         return_tuple += (init_W + avg_W_update,)
     if return_loss:
@@ -207,7 +209,8 @@ def multiclass_minibatch(Y,X,T,l,k,W,start_t=1,loss_computation=0,
     n_classes = max(W_classes[:,0].max()+1,Y.max()+1)
     class_masks = np.zeros((n_classes, W_init.shape[0]))
 
-def multiclass_weird_update(Y,X,T,l,k,W_init,W_classes,start_t=100,v=False,loss='hinge',
+def multiclass_multicomponent(Y,X,T,l,W,W_classes,start_t=100,v=False,loss='hinge',loss_computation=0,
+               return_avg_W=True,return_loss=True,
                do_projection=True,verbose=True):
     """
     The update is declared weird since it does not actually use
@@ -225,28 +228,46 @@ def multiclass_weird_update(Y,X,T,l,k,W_init,W_classes,start_t=100,v=False,loss=
 
     l : float
        lambda regularization parameter
-    k : int
-       batch size
-    W_init : (n_classifiers,n_features)
+    W : (n_classifiers,n_features)
        Initializaiton for W -- required
     W_meta : (n_classifiers, 2)
        class identities and mixture component
        identity for each of the classifiers in
        W_init
 
+    return_avg_W : bool
+       If True then we return the W produced as the average
+       of the updates
+
+    start_t : int
+       Starting round -- in the case of a warm-start one
+       may not wish to begin with round 1 since, presumably
+       the first few rounds have already been passed
+
+    loss_computation : int
+       If 0 then we do not compute the loss over the data set while
+       running the algorithm (which is good if the dataset is large),
+       otherwise if loss_computation > 0 we compute it every
+       loss_computation rounds.
+
     In each round we get the scores
     then we construct a class-mask over the scores
     and we map all the scores to a lower quantity
 
     """
-    k = min(X.shape[0],k)
     use_example_ids = np.random.randint(0,X.shape[0],size=(T,))
     n_classes = max(W_classes[:,0].max()+1,Y.max()+1)
-    class_masks = np.zeros((n_classes,W_init.shape[0]),dtype=bool)
+    class_masks = np.zeros((n_classes,W.shape[0]),dtype=bool)
     for y in xrange(n_classes):
         class_masks[y] = W_classes[:,0] == y
 
+    init_W = W.copy()
+    avg_W_update = np.zeros(W.shape)
+    new_W_delta = W.copy()
+
     oneoversqrtlambda = 1/np.sqrt(l)
+    loss_list = []
+    avg_W_loss_list = []
 
     for t, example_id in enumerate(use_example_ids):
         if t % 1000 == 0:
@@ -254,7 +275,7 @@ def multiclass_weird_update(Y,X,T,l,k,W_init,W_classes,start_t=100,v=False,loss=
                 print t
 
         y = Y[example_id]
-        scores = np.dot(W_init,X[example_id])
+        scores = np.dot(W,X[example_id])
         add_quantity = scores.max() - scores.min() +1
         true_class_best_score_id = np.argmax(scores + add_quantity* class_masks[y])
 
@@ -262,24 +283,55 @@ def multiclass_weird_update(Y,X,T,l,k,W_init,W_classes,start_t=100,v=False,loss=
         not_class_best_score_id = np.argmax(scores - add_quantity*class_masks[y])
         not_class_best_score = scores[not_class_best_score_id]
 
-        scaling = 1./(t+1.+start_t)
-        W_init -=  scaling * W_init
+        scaling = 1./max(1.,t+start_t)
+        new_W_delta =  -scaling * W
         # check the loss
         if (loss=='hinge' and true_class_best_score - not_class_best_score < 1) or (loss=='ramp' and abs(true_class_best_score - not_class_best_score) < 1):
             eta = scaling/l
-            W_init[true_class_best_score_id] += eta*X[example_id]
-            W_init[not_class_best_score_id] -= eta*X[example_id]
+            new_W_delta[true_class_best_score_id] += eta*X[example_id]
+            new_W_delta[not_class_best_score_id] -= eta*X[example_id]
+
+        if return_avg_W:
+            avg_W_update += (new_W_delta - avg_W_update)/(t+1)
+
+        W += new_W_delta
+
+
 
         if do_projection:
             if type(do_projection) == int:
                 if t % do_projection != 0: continue
-            W_init_norm = np.linalg.norm(W_init)
-            if W_init_norm == 0:
-                return W_init
-            scaling = oneoversqrtlambda/W_init_norm
-            W_init *= min(1,scaling)
+            W_norm = np.linalg.norm(W)
+            if W_norm == 0:
+                return_tuple = (W,)
+                if return_avg_W:
+                    return_tuple += (init_W + avg_W_update,)
+                if return_loss:
+                    return_tuple += (loss_list,)
+                if return_avg_W and return_loss:
+                    return_tuple += (avg_W_loss_list,)
+                return return_tuple
 
-    return W_init
+            scaling = oneoversqrtlambda/W_norm
+            W *= min(1,scaling)
+
+        # compute the zero-one loss to check for convergence
+        if loss_computation > 0 and (t % loss_computation == 0):
+            loss_list.append((t,(np.dot(X,W.T).argmax(1) == Y).sum() / X.shape[0]))
+            print "round %d: loss=%g" % (t,loss_list[-1][-1] )
+
+            if return_avg_W:
+                avg_W_loss_list.append((t, (np.dot(X,(init_W+avg_W_update).T).argmax(1) == Y).sum() / X.shape[0]))
+                print "round %d: loss avgW=%g" % (t, avg_W_loss_list[-1][-1])
+
+    return_tuple = (W,)
+    if return_avg_W:
+        return_tuple += (init_W + avg_W_update,)
+    if return_loss:
+        return_tuple += (loss_list,)
+    if return_avg_W and return_loss:
+        return_tuple += (avg_W_loss_list,)
+    return return_tuple
 
 
 def multiclass_regularize_diffs(Y,X,T,l,k,W_init,W_classes,v=False,loss='hinge',
