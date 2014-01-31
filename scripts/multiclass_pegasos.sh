@@ -11,3 +11,7 @@ mkdir -p $conf
 mkdir -p $plots
 
 # now we run the multiclass pegasos on the scattering features
+
+python local/pyscat_multiclass_pegasos_experiment.py --root_dir /var/tmp/stoehr/phoneclassification \
+  --data_dir data \
+  --exp_dir $exp
