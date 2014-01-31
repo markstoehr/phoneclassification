@@ -36,19 +36,20 @@ def perform_batch_updates(YX,T,l,k,w_init=None,v=False):
 
     return w
 
-def multiclass_minibatch(Y,X,T,l,W,start_t=1,loss_computation=0,
+def multiclass(Y,X,T,l,W,start_t=1,loss_computation=0,
                return_avg_W=True,verbose=False,loss='hinge',
                do_projection=False):
     """
     A multiclass implementation of the Pegasos
-    similar to the one presented by Zhuang Wang 2010
-
+    similar to the one presented by Zhuang Wang et al. 2010
+    ICML
+    
     Parameters
     ----------
     Y :   (n_samples,)
         Y classes
     X :   (n_samples, n_features)
-        Data 
+        Data
     T :  int
        Number of rounds over which to perform
        optimization
@@ -56,7 +57,7 @@ def multiclass_minibatch(Y,X,T,l,W,start_t=1,loss_computation=0,
     l : float
        lambda regularization parameter
 
-    W : (n_classifiers,n_features) 
+    W : (n_classifiers,n_features)
        Initializaiton for W -- required
        the assumption is that W[c] is the
        classifier for class c -- i.e. we work
@@ -73,8 +74,8 @@ def multiclass_minibatch(Y,X,T,l,W,start_t=1,loss_computation=0,
 
     loss_computation : int
        If 0 then we do not compute the loss over the data set while
-       running the algorithm (which is good if the dataset is large), 
-       otherwise if loss_computation > 0 we compute it every 
+       running the algorithm (which is good if the dataset is large),
+       otherwise if loss_computation > 0 we compute it every
        loss_computation rounds.
 
     In each round we get the scores
@@ -89,26 +90,26 @@ def multiclass_minibatch(Y,X,T,l,W,start_t=1,loss_computation=0,
     init_W = W.copy()
     avg_W_update = np.zeros(W.shape)
     new_W = W.copy()
-    
+
     oneoversqrtlambda = 1/np.sqrt(l)
     for t, example_id in enumerate(use_example_ids):
         if t % 1000 == 0:
             if verbose: print t
-        
+
         y = Y[example_id]
         scores = np.dot(W,X[example_id])
         add_quantity = scores.max() - scores.min() + 1
         true_class_best_score = scores[y]
         not_class_best_score_id = np.argmax( scores - add_quantity * class_masks[y])
         not_class_best_score = scores[not_class_best_score_id]
-        
+
         scaling = 1./max(1,t+start_t)
         new_W -= scaling * W
         if (loss=='hinge' and true_class_best_score - not_class_best_score < 1) or (loss=='ramp' and abs(true_class_best_score - not_class_best_score) < 1):
             eta = scaling/l
             new_W[y] += eta*X[example_id]
             new_W[not_class_best_score_id] -= eta*X[example_id]
-            
+
         if do_projection:
             if type(do_projection) == int:
                 if t % do_projection != 0: continue
@@ -118,7 +119,7 @@ def multiclass_minibatch(Y,X,T,l,W,start_t=1,loss_computation=0,
                 return (new_W, init_W + avg_W_update) if return_avg_W else new_W
             scaling = oneoversqrtlambda/W_norm
             new_W *= min(1,scaling)
-            
+
         if return_avg_W:
             avg_W_update += ((new_W - W) - avg_W_update)/(t+1)
 
@@ -129,8 +130,8 @@ def multiclass_minibatch(Y,X,T,l,W,start_t=1,loss_computation=0,
         W[:] = new_W[:]
 
     return (new_W, init_W + avg_W_update) if return_avg_W else new_W
-        
-        
+
+
 
 def multiclass_minibatch(Y,X,T,l,k,W,start_t=1,loss_computation=0,
                return_avg_W,verbose=False,loss='hinge',
@@ -144,7 +145,7 @@ def multiclass_minibatch(Y,X,T,l,k,W,start_t=1,loss_computation=0,
     Y :   (n_samples,)
         Y classes
     X :   (n_samples, n_features)
-        Data 
+        Data
     T :  int
        Number of rounds over which to perform
        optimization
@@ -153,7 +154,7 @@ def multiclass_minibatch(Y,X,T,l,k,W,start_t=1,loss_computation=0,
        lambda regularization parameter
     k : int
        batch size
-    W : (n_features,n_classifiers) 
+    W : (n_features,n_classifiers)
        Initializaiton for W -- required
        the assumption is that W[:,c] is the
        classifier for class c -- i.e. we work
@@ -172,8 +173,8 @@ def multiclass_minibatch(Y,X,T,l,k,W,start_t=1,loss_computation=0,
 
     loss_computation : int
        If 0 then we do not compute the loss over the data set while
-       running the algorithm (which is good if the dataset is large), 
-       otherwise if loss_computation > 0 we compute it every 
+       running the algorithm (which is good if the dataset is large),
+       otherwise if loss_computation > 0 we compute it every
        loss_computation rounds.
 
     In each round we get the scores
@@ -196,7 +197,7 @@ def multiclass_weird_update(Y,X,T,l,k,W_init,W_classes,start_t=100,v=False,loss=
     Y :   (n_samples,)
         Y classes
     X :   (n_samples, n_features)
-        Data 
+        Data
     T :  int
        Number of rounds over which to perform
        optimization
@@ -205,7 +206,7 @@ def multiclass_weird_update(Y,X,T,l,k,W_init,W_classes,start_t=100,v=False,loss=
        lambda regularization parameter
     k : int
        batch size
-    W_init : (n_classifiers,n_features) 
+    W_init : (n_classifiers,n_features)
        Initializaiton for W -- required
     W_meta : (n_classifiers, 2)
        class identities and mixture component
@@ -218,7 +219,7 @@ def multiclass_weird_update(Y,X,T,l,k,W_init,W_classes,start_t=100,v=False,loss=
 
     """
     k = min(X.shape[0],k)
-    use_example_ids = np.random.randint(0,X.shape[0],size=(T,)) 
+    use_example_ids = np.random.randint(0,X.shape[0],size=(T,))
     n_classes = max(W_classes[:,0].max()+1,Y.max()+1)
     class_masks = np.zeros((n_classes,W_init.shape[0]),dtype=bool)
     for y in xrange(n_classes):
@@ -230,7 +231,7 @@ def multiclass_weird_update(Y,X,T,l,k,W_init,W_classes,start_t=100,v=False,loss=
         if t % 1000 == 0:
             if verbose:
                 print t
-            
+
         y = Y[example_id]
         scores = np.dot(W_init,X[example_id])
         add_quantity = scores.max() - scores.min() +1
@@ -256,7 +257,7 @@ def multiclass_weird_update(Y,X,T,l,k,W_init,W_classes,start_t=100,v=False,loss=
                 return W_init
             scaling = oneoversqrtlambda/W_init_norm
             W_init *= min(1,scaling)
-            
+
     return W_init
 
 
@@ -268,7 +269,7 @@ def multiclass_regularize_diffs(Y,X,T,l,k,W_init,W_classes,v=False,loss='hinge',
     Y :   (n_samples,)
         Y classes
     X :   (n_samples, n_features)
-        Data 
+        Data
     T :  int
        Number of rounds over which to perform
        optimization
@@ -277,7 +278,7 @@ def multiclass_regularize_diffs(Y,X,T,l,k,W_init,W_classes,v=False,loss='hinge',
        lambda regularization parameter
     k : int
        batch size
-    W_init : (n_classifiers,n_features) 
+    W_init : (n_classifiers,n_features)
        Initializaiton for W -- required
     W_meta : (n_classifiers, 2)
        class identities and mixture component
@@ -298,7 +299,7 @@ def multiclass_regularize_diffs(Y,X,T,l,k,W_init,W_classes,v=False,loss='hinge',
         class_masks[y] = W_classes[:,0] == y
 
     oneoversqrtlambda = 1/np.sqrt(l)
-    
+
     # get the number of classifiers
     M = W_init.shape[0]
     for t, example_id in enumerate(use_example_ids):
@@ -331,8 +332,8 @@ def multiclass_regularize_diffs(Y,X,T,l,k,W_init,W_classes,v=False,loss='hinge',
                 wl = oneoversqrtlambda/sqW_init_norm
                 wl_top = sqW_init_norm/oneoversqrtlambda
                 W_init = wl * W_init + (wl_top-1)*wl/M * W_init.sum(0)
-            
+
     return W_init
 
-    
-    
+
+
