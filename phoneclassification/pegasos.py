@@ -37,13 +37,13 @@ def perform_batch_updates(YX,T,l,k,w_init=None,v=False):
     return w
 
 def multiclass(Y,X,T,l,W,start_t=1,loss_computation=0,
-               return_avg_W=True,verbose=False,loss='hinge',
+               return_avg_W=True,return_loss=True,verbose=False,loss='hinge',
                do_projection=False):
     """
     A multiclass implementation of the Pegasos
     similar to the one presented by Zhuang Wang et al. 2010
     ICML
-    
+
     Parameters
     ----------
     Y :   (n_samples,)
@@ -82,7 +82,6 @@ def multiclass(Y,X,T,l,W,start_t=1,loss_computation=0,
     then we construct a class-mask over the scores
     and we map all the scores to a lower quantity
     """
-    k = min(X.shape[0],k)
     use_example_ids = np.random.randint(0,X.shape[0],size=(T,))
     n_classes, n_features = W.shape
     # class masks makes finding best non-class happen more easily
@@ -92,6 +91,8 @@ def multiclass(Y,X,T,l,W,start_t=1,loss_computation=0,
     new_W = W.copy()
 
     oneoversqrtlambda = 1/np.sqrt(l)
+    loss_list = []
+    avg_W_loss_list = []
     for t, example_id in enumerate(use_example_ids):
         if t % 1000 == 0:
             if verbose: print t
@@ -116,7 +117,14 @@ def multiclass(Y,X,T,l,W,start_t=1,loss_computation=0,
 
             W_norm = np.linalg.norm(new_W)
             if W_norm == 0:
-                return (new_W, init_W + avg_W_update) if return_avg_W else new_W
+                return_tuple = (new_W,)
+                if return_avg_W:
+                    return_tuple += (init_W + avg_W_update,)
+                if return_loss:
+                    return_tuple += (loss_list,)
+                if return_avg_W and return_loss:
+                    return_tuple += (avg_W_loss_list,)
+                return return_tuple
             scaling = oneoversqrtlambda/W_norm
             new_W *= min(1,scaling)
 
@@ -125,11 +133,24 @@ def multiclass(Y,X,T,l,W,start_t=1,loss_computation=0,
 
         # compute the zero-one loss to check for convergence
         if loss_computation > 0 and (t % loss_computation == 0):
-            print "round %d: loss=%g" % (t, (np.dot(X,W.T).argmax(1) == Y).sum() / X.shape)
+            loss_list.append((t,(np.dot(X,W.T).argmax(1) == Y).sum() / X.shape[0]))
+            print "round %d: loss=%g" % (t,loss_list[-1][-1] )
+
+            if return_avg_W:
+                avg_W_loss_list.append((t, (np.dot(X,(init_W+avg_W_update).T).argmax(1) == Y).sum() / X.shape[0]))
+                print "round %d: loss avgW=%g" % (t, avg_W_loss_list[-1][-1])
 
         W[:] = new_W[:]
 
-    return (new_W, init_W + avg_W_update) if return_avg_W else new_W
+    return_tuple = (new_W,)
+    if return_avg_W:
+        return_tuple += (init_W + avg_W_update,)
+    if return_loss:
+        return_tuple += (loss_list,)
+    if return_avg_W and return_loss:
+        return_tuple += (avg_W_loss_list,)
+    return return_tuple
+
 
 
 
