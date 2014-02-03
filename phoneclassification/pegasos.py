@@ -154,6 +154,267 @@ def multiclass(Y,X,T,l,W,start_t=1,loss_computation=0,
     return return_tuple
 
 
+def multiclass_polyavg(Y,X,T,l,W,eta,start_t=1,loss_computation=0,
+               return_avg_W=True,return_loss=True,verbose=False,loss='hinge',
+               do_projection=False):
+    """
+    A multiclass implementation of the Pegasos
+    similar to the one presented by Zhuang Wang et al. 2010
+    ICML
+
+    Parameters
+    ----------
+    Y :   (n_samples,)
+        Y classes
+    X :   (n_samples, n_features)
+        Data
+    T :  int
+       Number of rounds over which to perform
+       optimization
+
+    l : float
+       lambda regularization parameter
+
+    W : (n_classifiers,n_features)
+       Initializaiton for W -- required
+       the assumption is that W[c] is the
+       classifier for class c -- i.e. we work
+       from the rows as classifiers
+
+    eta : float
+       Should be greater than zero, polynomial average weight
+
+    return_avg_W : bool
+       If True then we return the W produced as the average
+       of the updates
+
+    start_t : int
+       Starting round -- in the case of a warm-start one
+       may not wish to begin with round 1 since, presumably
+       the first few rounds have already been passed
+
+    loss_computation : int
+       If 0 then we do not compute the loss over the data set while
+       running the algorithm (which is good if the dataset is large),
+       otherwise if loss_computation > 0 we compute it every
+       loss_computation rounds.
+
+    In each round we get the scores
+    then we construct a class-mask over the scores
+    and we map all the scores to a lower quantity
+    """
+    use_example_ids = np.random.randint(0,X.shape[0],size=(T,))
+    n_classes, n_features = W.shape
+    # class masks makes finding best non-class happen more easily
+    class_masks = np.eye(n_classes)
+    init_W = W.copy()
+    poly_avg_W = np.zeros(W.shape)
+    new_W = W.copy()
+
+    oneoversqrtlambda = 1/np.sqrt(l)
+    loss_list = []
+    avg_W_loss_list = []
+    for t, example_id in enumerate(use_example_ids):
+        if t % 1000 == 0:
+            if verbose: print t
+
+        y = Y[example_id]
+        scores = np.dot(W,X[example_id])
+        add_quantity = scores.max() - scores.min() + 1
+        true_class_best_score = scores[y]
+        not_class_best_score_id = np.argmax( scores - add_quantity * class_masks[y])
+        not_class_best_score = scores[not_class_best_score_id]
+
+        scaling = 1./max(1,t+start_t)
+        new_W = (1 - scaling) * W
+        if (loss=='hinge' and true_class_best_score - not_class_best_score < 1) or (loss=='ramp' and abs(true_class_best_score - not_class_best_score) < 1):
+            eta = scaling/l
+            new_W[y] += eta*X[example_id]
+            new_W[not_class_best_score_id] -= eta*X[example_id]
+        
+        if return_avg_W:
+            coeff = (eta+1)/(t+eta+1)
+            poly_avg_W = ( 1 - coeff)*poly_avg_W + coeff * new_W
+
+        W = new_W[:]
+            
+        if do_projection:
+            if type(do_projection) == int:
+                if t % do_projection != 0: continue
+
+            W_norm = np.linalg.norm(W)
+            if W_norm == 0:
+                return_tuple = (W,)
+                if return_avg_W:
+                    return_tuple += (poly_avg_W,)
+                if return_loss:
+                    return_tuple += (loss_list,)
+                if return_avg_W and return_loss:
+                    return_tuple += (avg_W_loss_list,)
+                return return_tuple
+            scaling = oneoversqrtlambda/W_norm
+            W *= min(1,scaling)
+
+
+        
+        # compute the zero-one loss to check for convergence
+        if loss_computation > 0 and (t % loss_computation == 0):
+            loss_list.append((t,(np.dot(X,W.T).argmax(1) == Y).sum() / X.shape[0]))
+            print "round %d: loss=%g" % (t,loss_list[-1][-1] )
+
+            if return_avg_W:
+                avg_W_loss_list.append((t, (np.dot(X,poly_avg_W.T).argmax(1) == Y).sum() / X.shape[0]))
+                print "round %d: loss avgW=%g" % (t, avg_W_loss_list[-1][-1])
+
+
+    return_tuple = (W,)
+    if return_avg_W:
+        return_tuple += (poly_avg_W,)
+    if return_loss:
+        return_tuple += (loss_list,)
+    if return_avg_W and return_loss:
+        return_tuple += (avg_W_loss_list,)
+    return return_tuple
+
+
+def multiclass_multicomponent_polyavg(Y,X,T,l,W,W_classes,eta,start_t=1,loss_computation=0,
+               return_avg_W=True,return_loss=True,verbose=False,loss='hinge',
+               do_projection=False):
+    """
+    A multiclass implementation of the Pegasos
+    similar to the one presented by Zhuang Wang et al. 2010
+    ICML
+
+    Parameters
+    ----------
+    Y :   (n_samples,)
+        Y classes
+    X :   (n_samples, n_features)
+        Data
+    T :  int
+       Number of rounds over which to perform
+       optimization
+
+    l : float
+       lambda regularization parameter
+
+    W : (n_classifiers,n_features)
+       Initializaiton for W -- required
+       the assumption is that W[c] is the
+       classifier for class c -- i.e. we work
+       from the rows as classifiers
+
+    W_classes : (n_classifiers, 2)
+       class identities and mixture component
+       identity for each of the classifiers in
+       W
+
+    eta : float
+       Should be greater than zero, polynomial average weight
+
+    return_avg_W : bool
+       If True then we return the W produced as the average
+       of the updates
+
+    start_t : int
+       Starting round -- in the case of a warm-start one
+       may not wish to begin with round 1 since, presumably
+       the first few rounds have already been passed
+
+    loss_computation : int
+       If 0 then we do not compute the loss over the data set while
+       running the algorithm (which is good if the dataset is large),
+       otherwise if loss_computation > 0 we compute it every
+       loss_computation rounds.
+
+    In each round we get the scores
+    then we construct a class-mask over the scores
+    and we map all the scores to a lower quantity
+    """
+    use_example_ids = np.random.randint(0,X.shape[0],size=(T,))
+    n_classes, n_features = W.shape
+    # class masks makes finding best non-class happen more easily
+    class_masks = np.zeros((n_classes,W.shape[0]),dtype=bool)
+    for y in xrange(n_classes):
+        class_masks[y] = W_classes[:,0] == y
+
+    init_W = W.copy()
+    poly_avg_W = np.zeros(W.shape)
+    new_W = W.copy()
+
+    oneoversqrtlambda = 1/np.sqrt(l)
+    loss_list = []
+    avg_W_loss_list = []
+    for t, example_id in enumerate(use_example_ids):
+        if t % 1000 == 0:
+            if verbose: print t
+
+        y = Y[example_id]
+        scores = np.dot(W,X[example_id])
+        add_quantity = scores.max() - scores.min() + 1
+        true_class_best_score_id = np.argmax(scores + add_quantity* class_masks[y])
+        true_class_best_score = scores[true_class_best_score_id]
+        not_class_best_score_id = np.argmax( scores - add_quantity * class_masks[y])
+        not_class_best_score = scores[not_class_best_score_id]
+
+        scaling = 1./max(1,t+start_t)
+        new_W = (1 - scaling) * W
+        if (loss=='hinge' and true_class_best_score - not_class_best_score < 1) or (loss=='ramp' and abs(true_class_best_score - not_class_best_score) < 1):
+            eta = scaling/l
+            new_W[true_class_best_score_id] += eta*X[example_id]
+            new_W[not_class_best_score_id] -= eta*X[example_id]
+        
+        if return_avg_W:
+            coeff = (eta+1)/(t+eta+1)
+            poly_avg_W = ( 1 - coeff)*poly_avg_W + coeff * new_W
+
+        W = new_W[:]
+            
+        if do_projection:
+            if type(do_projection) == int:
+                if t % do_projection != 0: continue
+
+            W_norm = np.linalg.norm(W)
+            if W_norm == 0:
+                return_tuple = (W,)
+                if return_avg_W:
+                    return_tuple += (poly_avg_W,)
+                if return_loss:
+                    return_tuple += (loss_list,)
+                if return_avg_W and return_loss:
+                    return_tuple += (avg_W_loss_list,)
+                return return_tuple
+            scaling = oneoversqrtlambda/W_norm
+            W *= min(1,scaling)
+
+
+        
+        # compute the zero-one loss to check for convergence
+        if loss_computation > 0 and (t % loss_computation == 0):
+            max_component_ids = np.dot(X,W.T).argmax(1)
+            yhat = W[:,0][max_component_ids]
+            loss_list.append((t,(yhat == Y).sum() / X.shape[0]))
+            print "round %d: loss=%g" % (t,loss_list[-1][-1] )
+
+            if return_avg_W:
+                max_component_ids = np.dot(X,poly_avg_W.T).argmax(1)
+                yhat = W[:,0][max_component_ids]
+
+                avg_W_loss_list.append((t, (yhat == Y).sum() / X.shape[0]))
+                print "round %d: loss avgW=%g" % (t, avg_W_loss_list[-1][-1])
+
+
+    return_tuple = (W,)
+    if return_avg_W:
+        return_tuple += (poly_avg_W,)
+    if return_loss:
+        return_tuple += (loss_list,)
+    if return_avg_W and return_loss:
+        return_tuple += (avg_W_loss_list,)
+    return return_tuple
+
+
+
 
 
 def multiclass_minibatch(Y,X,T,l,k,W,start_t=1,loss_computation=0,
