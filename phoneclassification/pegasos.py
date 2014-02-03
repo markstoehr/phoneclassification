@@ -332,11 +332,14 @@ def multiclass_multicomponent_polyavg(Y,X,T,l,W,W_classes,eta,start_t=1,loss_com
     and we map all the scores to a lower quantity
     """
     use_example_ids = np.random.randint(0,X.shape[0],size=(T,))
-    n_classes, n_features = W.shape
+    n_classes = max(W[:,0].max(),Y.max())+1
+    n_features = W.shape[1]
     # class masks makes finding best non-class happen more easily
     class_masks = np.zeros((n_classes,W.shape[0]),dtype=bool)
     for y in xrange(n_classes):
         class_masks[y] = W_classes[:,0] == y
+        print "Sum over class masks for row %d: %d" %(y,class_masks[y].sum())
+
 
     init_W = W.copy()
     poly_avg_W = np.zeros(W.shape)
@@ -392,16 +395,31 @@ def multiclass_multicomponent_polyavg(Y,X,T,l,W,W_classes,eta,start_t=1,loss_com
         # compute the zero-one loss to check for convergence
         if loss_computation > 0 and (t % loss_computation == 0):
             max_component_ids = np.dot(X,W.T).argmax(1)
-            yhat = W[:,0][max_component_ids]
-            loss_list.append((t,(yhat == Y).sum() / X.shape[0]))
-            print "round %d: loss=%g" % (t,loss_list[-1][-1] )
+            yhat = W_classes[:,0][max_component_ids]
+
+            loss_list.append((t,1-(yhat == Y).sum() / X.shape[0]))
+            print "round %d: avg loss=%g" % (t,loss_list[-1][-1] )
 
             if return_avg_W:
                 max_component_ids = np.dot(X,poly_avg_W.T).argmax(1)
-                yhat = W[:,0][max_component_ids]
+                yhat = W_classes[:,0][max_component_ids]
 
-                avg_W_loss_list.append((t, (yhat == Y).sum() / X.shape[0]))
-                print "round %d: loss avgW=%g" % (t, avg_W_loss_list[-1][-1])
+                avg_W_loss_list.append((t,1- (yhat == Y).sum() / X.shape[0]))
+                print "round %d: avg loss avgW=%g" % (t, avg_W_loss_list[-1][-1])
+
+
+    max_component_ids = np.dot(X,W.T).argmax(1)
+    yhat = W_classes[:,0][max_component_ids]
+
+    loss_list.append((t,1-(yhat == Y).sum() / X.shape[0]))
+    print "round %d: avg loss=%g" % (t,loss_list[-1][-1] )
+
+    if return_avg_W:
+        max_component_ids = np.dot(X,poly_avg_W.T).argmax(1)
+        yhat = W_classes[:,0][max_component_ids]
+        
+        avg_W_loss_list.append((t,1- (yhat == Y).sum() / X.shape[0]))
+        print "round %d: avg loss avgW=%g" % (t, avg_W_loss_list[-1][-1])
 
 
     return_tuple = (W,)
