@@ -168,3 +168,13 @@ python $pegasos_local/multicomponent_simple_pegasos_train.py --rootdir /home/mar
     --avgs_meta_list_fl train_21C_warm_pegasos_avgs_meta_fl\
     --save_prefix warm_train_pegasos\
     --save_suffix .npy
+
+
+python $local/simple_train_multicomponent_pegasos.py --root_dir /home/mark/Research/phoneclassification \
+  --data_dir data/local/data \
+  --model_avgs $exp/avgs_6C.npy \
+  --model_meta $exp/meta_6C.npy \
+  --save_prefix $exp/multicomponent_pegasos_6C \
+  -l .5 .1 .05 .01 .005 .0001 \
+  --eta .1 \
+  -T 1000000 10000000 
