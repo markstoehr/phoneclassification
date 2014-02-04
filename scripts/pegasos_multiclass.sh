@@ -175,6 +175,6 @@ python $local/simple_train_multicomponent_pegasos.py --root_dir /home/mark/Resea
   --model_avgs $exp/avgs_6C.npy \
   --model_meta $exp/meta_6C.npy \
   --save_prefix $exp/multicomponent_pegasos_6C \
-  -l .5 .1 .05 .01 .005 .0001 \
+  -l .05 .01 .1 .5 .005 .0001 \
   --eta .1 \
-  -T 1000000 10000000 
+  -T 100000 100000 100000 100000 100000
