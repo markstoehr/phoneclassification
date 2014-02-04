@@ -65,25 +65,23 @@ W_meta = np.load(args.cluster_meta).astype(int)
 # need to construct W_meta39 to use 39 labels
 W_meta39 = get_reduced_meta(W_meta,leehon_dict).astype(int)
 
-for l in args.l:
-    print "Using lambda = %g " % l
-    for eta in args.eta:
-        print "Using eta = %g" % eta
+for eta in args.eta:
+    print "Using eta = %g" % eta
+    for l in args.l:
+        print "Using lambda = %g " % l
         poly_avg_W = W.copy()
         W_trained = W.copy()
         start_t = 1
         for T in args.T:
             print "number of iterations T= %d" % (T+start_t)
-            W_trained2, poly_avg_W, W_loss2, poly_avg_W_loss = multiclass_multicomponent_polyavg(y39,X,T,l,poly_avg_W,W_meta39,eta,start_t=start_t,loss_computation=2000,
+            W_trained, poly_avg_W, W_loss, poly_avg_W_loss = multiclass_multicomponent_polyavg(y39,X,T,l,W_trained,W_meta39,eta,start_t=start_t,loss_computation=2000,
                return_avg_W=True,return_loss=True,verbose=True,loss='hinge',
                do_projection=False)
-            W_trained, poly_avg_W2, W_loss, poly_avg_W_loss2 = multiclass_multicomponent_polyavg(y39,X,T,l,W_trained,W_meta39,eta,start_t=start_t,loss_computation=2000,
-               return_avg_W=True,return_loss=True,verbose=True,loss='hinge',
-               do_projection=False)
+
             start_t += T
-            np.save('%s_%gl_%dT_W.npy' % (args.save_prefix,l,T), W_trained)
-            np.save('%s_%gl_%dT_W_loss.npy' % (args.save_prefix,l,T), W_loss)
-            np.save('%s_polyavg_%gl_%geta_%dT_W.npy' % (args.save_prefix,l,eta,T), poly_avg_W)
-            np.save('%s_polyavg_%gl_%geta_%dT_W_loss.npy' % (args.save_prefix,l,eta,T), poly_avg_W_loss)
+            np.save('%s_%gl_%dT_W.npy' % (args.save_prefix,l,start_t-1), W_trained)
+            np.save('%s_%gl_%dT_W_loss.npy' % (args.save_prefix,l,start_t-1), W_loss)
+            np.save('%s_polyavg_%gl_%geta_%dT_W.npy' % (args.save_prefix,l,eta,start_t-1), poly_avg_W)
+            np.save('%s_polyavg_%gl_%geta_%dT_W_loss.npy' % (args.save_prefix,l,eta,start_t-1), poly_avg_W_loss)
 
 
