@@ -435,6 +435,7 @@ def multiclass_multicomponent_polyavg(Y,X,T,l,W,W_classes,eta,start_t=1,loss_com
 
 
 
+
 def multiclass_minibatch(Y,X,T,l,k,W,start_t=1,loss_computation=0,
                return_avg_W=True,verbose=False,loss='hinge',
                do_projection=False):
