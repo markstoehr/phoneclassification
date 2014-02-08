@@ -408,18 +408,19 @@ def multiclass_multicomponent_polyavg(Y,X,T,l,W,W_classes,eta,start_t=1,loss_com
                 print "round %d: avg loss avgW=%g" % (t, avg_W_loss_list[-1][-1])
 
 
-    max_component_ids = np.dot(X,W.T).argmax(1)
-    yhat = W_classes[:,0][max_component_ids]
-
-    loss_list.append((t,1-(yhat == Y).sum() / X.shape[0]))
-    print "round %d: avg loss=%g" % (t,loss_list[-1][-1] )
-
-    if return_avg_W:
-        max_component_ids = np.dot(X,poly_avg_W.T).argmax(1)
+    if loss_computation > 0:
+        max_component_ids = np.dot(X,W.T).argmax(1)
         yhat = W_classes[:,0][max_component_ids]
-        
-        avg_W_loss_list.append((t,1- (yhat == Y).sum() / X.shape[0]))
-        print "round %d: avg loss avgW=%g" % (t, avg_W_loss_list[-1][-1])
+
+        loss_list.append((t,1-(yhat == Y).sum() / X.shape[0]))
+        print "round %d: avg loss=%g" % (t,loss_list[-1][-1] )
+
+        if return_avg_W:
+            max_component_ids = np.dot(X,poly_avg_W.T).argmax(1)
+            yhat = W_classes[:,0][max_component_ids]
+            
+            avg_W_loss_list.append((t,1- (yhat == Y).sum() / X.shape[0]))
+            print "round %d: avg loss avgW=%g" % (t, avg_W_loss_list[-1][-1])
 
 
     return_tuple = (W,)
