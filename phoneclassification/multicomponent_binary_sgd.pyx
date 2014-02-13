@@ -2,10 +2,14 @@
 # cython: boundscheck=False
 # cython: wraparound=False
 #
-# Author: Peter Prettenhofer <peter.prettenhofer@gmail.com>
+# Author: Mark Stoehr
+#
+# Based on code by:
+#         Peter Prettenhofer <peter.prettenhofer@gmail.com>
 #         Mathieu Blondel (partial_fit support)
 #         Rob Zinkov (passive-aggressive)
 #         Lars Buitinck
+#         
 #
 # Licence: BSD 3 clause
 
@@ -34,6 +38,9 @@ DEF INVSCALING = 3
 DEF PA1 = 4
 DEF PA2 = 5
 
+DEF EPSILON = 0.000001
+DEF LOGEPSILON = -13.8156
+
 # setup bool types
 BOOL = np.uint8
 ctypedef np.uint8_t BOOL_t
@@ -59,6 +66,7 @@ cdef class BinaryArrayDataset(object):
     cdef int * rownnz_ptr
     cdef int * index_data_ptr
     cdef np.ndarray index
+    
     
     def __cinit__(self, np.ndarray[int, ndim=1, mode='c'] X_indices,
                    np.ndarray[int, ndim=1, mode='c'] rownnz,
@@ -177,12 +185,39 @@ cdef class MultiWeightMatrix(object):
     cdef np.ndarray class_row_idx
     cdef int * class_row_idx_ptr
 
+    # smoothed loss gradient and assignment parameters
+    cdef double gamma, beta
+
+    # components for computing the gradient
+    cdef int best_true_row, best_off_row, n_use_off_scores, n_use_true_scores
+    
+    cdef double best_true_score, best_off_score, add_scaling, off_score_normalization, true_score_normalization
+
+    cdef np.ndarray gradient
+    cdef double * gradient_ptr
+    
+    cdef np.ndarray use_off_score_ids
+    cdef int * use_off_score_ids_ptr
+    cdef np.ndarray use_off_scores
+    cdef double * use_off_scores_ptr
+    cdef np.ndarray use_true_score_ids
+    cdef int * use_true_score_ids_ptr
+    cdef np.ndarray use_true_scores
+    cdef double * use_true_scores_ptr
+
     def __cinit__(self, np.ndarray[double, ndim=1, mode='c'] W,
                   np.ndarray[int, ndim=1, mode='c'] W_classes,
                   np.ndarray[int, ndim=1, mode='c'] W_components,
-                  int n_classes):
+                  int n_classes, double gamma, double beta):
         """
         W should be put out as a single column vector
+
+        Parameters :
+        -------------
+        gamma: double
+            Parameter for computing the smoothed hinge loss gradient
+        beta: double
+            Parameter for computed the smoothed assignment vector
         """
         cdef double *wdata = <double *>W.data
 
@@ -242,9 +277,40 @@ cdef class MultiWeightMatrix(object):
 
         self.class_n_components_ptr[W_classes[i-1]] = nrow_components
 
+        self.beta = beta
+        self.gamma = gamma
+
         self.sq_norm = ddot(self.n_entries,
                                              <double *>W.data, 1, <double *>W.data,1)
             
+        # gradient
+        cdef np.ndarray[double,ndim=1,mode='c'] gradient = np.zeros(
+            self.n_entries,dtype=np.float)
+        self.gradient = gradient
+        self.gradient_ptr = <double *>gradient.data
+
+        # relevant scores
+        cdef np.ndarray[int,ndim=1,mode='c'] use_true_score_ids = np.zeros(
+            self.n_components,dtype=np.intc)
+        self.use_true_score_ids = use_true_score_ids
+        self.use_true_score_ids_ptr = <int *>use_true_score_ids.data
+    
+        cdef np.ndarray[double,ndim=1,mode='c'] use_true_scores = np.zeros(
+            self.n_components,dtype=np.float)
+        self.use_true_scores = use_true_scores
+        self.use_true_scores_ptr = <double *>use_true_scores.data
+
+        cdef np.ndarray[int,ndim=1,mode='c'] use_off_score_ids = np.zeros(
+            self.n_components,dtype=np.intc)
+        self.use_off_score_ids = use_off_score_ids
+        self.use_off_score_ids_ptr = <int *>use_off_score_ids.data
+    
+        cdef np.ndarray[double,ndim=1,mode='c'] use_off_scores = np.zeros(
+            self.n_components,dtype=np.float)
+        self.use_off_scores = use_off_scores
+        self.use_off_scores_ptr = <double *>use_off_scores.data
+
+
     
     cdef void binary_add(self, int w_row,
                          int *x_ind_ptr, int xnnz, double c) nogil:
@@ -315,6 +381,85 @@ cdef class MultiWeightMatrix(object):
                 idx = x_ind_ptr[j]
                 scores_data_ptr[i] += cur_data_ptr[idx]
 
+    cdef void find_best_scores(self, int y) nogil:
+        """Assumes scores have been computed with self.dot
+        and finds the row of W that attained the highest score
+        within class and outside the class
+        """
+        if y == 0:
+            self.best_true_row = 0
+            self.best_off_row = self.class_row_idx_ptr[1]
+        else:
+            self.best_true_row = self.class_row_idx_ptr[y]
+            self.best_off_row = 0
+            
+        self.best_true_score = self.scores_data_ptr[self.best_true_row]
+        self.best_off_score = self.scores_data_ptr[self.best_off_row]
+        cdef int j
+        for j in range(self.n_components):
+            if self.W_classes_ptr[j] == y: # within class
+                if self.scores_data_ptr[j] > self.best_true_score:
+                    self.best_true_row = j
+                    self.best_true_score = self.scores_data_ptr[j]
+                    
+            else: # outside class
+                if self.scores_data_ptr[j] > self.best_off_score:
+                    self.best_off_row = j
+                    self.best_off_score = self.scores_data_ptr[j]
+
+
+    cdef int smooth_best_scores(self, int y) nogil:
+        """Stores the smoothed loss gradients and
+        smoothed assignments in self.use_off_scores and
+        self.use_true_scores respectively if the loss gradient
+        is non-negligibly the zero vector.  
+        
+        Returns 1 if the loss gradient is non-neglibly the zero
+        vector otherwise returns 0
+
+        The loss gradient vector and the assignment vector are
+        generally sparse and their entries are stored in
+        self.use_off_scores, self.use_true_scores with indices
+        self.use_off_score_ids, self.use_true_score_ids, respectively
+        """
+        # need to find the best scores in order to get
+        # the normalizations working
+        self.find_best_scores(y)
+        self.off_score_normalization = (1.0 + self.best_off_score - self.best_true_score)/self.gamma
+
+        if self.off_score_normalization <= LOGEPSILON:
+            # negligible loss-gradient
+            return 0
+
+        self.off_score_normalization = exp(-self.off_score_normalization)
+        self.true_score_normalization = 0.0
+        self.n_use_off_scores = 0
+        self.n_use_true_scores = 0
+
+
+
+        for j in range(self.n_components):
+            if self.W_classes_ptr[j] == y:
+                self.use_true_scores_ptr[self.n_use_true_scores] = (self.scores_data_ptr[j] - self.best_true_score)/self.beta
+                if self.use_true_scores_ptr[self.n_use_true_scores] > LOGEPSILON:
+                    self.use_true_scores_ptr[self.n_use_true_scores] = exp(self.use_true_scores_ptr[self.n_use_true_scores])
+                    self.true_score_normalization += self.use_true_scores_ptr[self.n_use_true_scores]
+                    self.use_true_score_ids_ptr[self.n_use_true_scores] = j
+                    self.n_use_true_scores += 1
+
+
+            else:
+                self.use_off_scores_ptr[self.n_use_off_scores] = (self.scores_data_ptr[j] - self.best_off_score)/self.gamma
+                
+                if self.use_off_scores_ptr[self.n_use_off_scores] > LOGEPSILON:
+                    self.use_off_scores_ptr[self.n_use_off_scores] = exp(self.use_off_scores_ptr[self.n_use_off_scores])
+                    self.use_off_score_ids_ptr[self.n_use_off_scores] = j
+                    self.off_score_normalization += self.use_off_scores_ptr[self.n_use_off_scores]
+                    
+                    self.n_use_off_scores += 1
+        
+        return 1
+
         
     cdef void scale(self, double c) nogil:
         """Scales the weight vector by a constant ``c``. It updates ``wscale``, ``sq_norm``, and ``row_sq_norms``. If ``Wscale`` gets too small we call ``reset_wscale``.
@@ -347,7 +492,179 @@ def multiclass_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
                    int verbose,
                    double start_t,
                    double lambda_param,
-                   int do_projection):
+                   int do_projection, double time_scaling, int use_hinge):
+    cdef Py_ssize_t n_samples = dataset.n_samples
+
+    print ("n_samples = %d " %n_samples)
+    cdef MultiWeightMatrix W = MultiWeightMatrix(weights,weights_classes, weights_components, n_classes)
+
+    print ("sq_norm = %g" % W.sq_norm)
+    
+    cdef Py_ssize_t n_components = W.n_components
+    cdef int *x_ind_ptr = NULL
+    cdef short int y = 0
+    cdef int xnnz, best_true_row, best_off_row, do_update
+    cdef double best_true_score, best_off_score, scaling
+    cdef double eta, t, oneoversqrtlambda
+    
+    oneoversqrtlambda = 1./sqrt(lambda_param)
+
+    t = start_t + 1.0
+    print ("t=%g" % t)
+
+    cdef unsigned int epoch
+    cdef Py_ssize_t i, j
+
+    for i in range(W.n_classes):
+        print ("Class %d in the weight matrix starts on row %d and has %d components" % (i,W.class_row_idx_ptr[i],W.class_n_components_ptr[i]))
+
+    for epoch in range(n_iter):
+        if verbose > 0:
+            print ("-- Epoch %d" % epoch)
+        if shuffle > 0:
+            dataset.shuffle(seed)
+        for i in range(n_samples):
+            if verbose > 1:
+                print ("\n\n-----Working on sample %d------" % i)
+            if i % 5000 == 0:
+                print i
+            dataset.next( & x_ind_ptr, & xnnz, & y)
+
+            W.dot( x_ind_ptr, xnnz)
+            if verbose > 1:
+                print ("y = %d" % y)
+                for j in range(xnnz):
+                    print ("x[%d] = 1" % x_ind_ptr[j])
+
+            if y == 0:
+                best_true_row = 0
+                best_off_row = W.class_row_idx_ptr[1]
+                
+            else:
+                best_off_row = 0
+                best_true_row = W.class_row_idx_ptr[y]
+
+            if verbose > 1:
+                print ("Initial best_true_row= %d\t best_off_row=%d" % (best_true_row,best_off_row))
+                
+            # initialize the estimated best scores for updates
+            best_true_score = W.scores_data_ptr[best_true_row]
+            best_off_score = W.scores_data_ptr[best_off_row]
+            
+            # find the best row for both
+            for j in range(W.n_components):
+
+                
+                if W.W_classes_ptr[j] == y:
+                    if verbose > 1:
+                        print ("Within class Comparing within class on row %d with score %g " % (j,W.scores_data_ptr[j]))
+                    # within class 
+                    if W.scores_data_ptr[j] > best_true_score:
+                        
+                        if verbose > 1:
+                            print ("row %d score %g is bigger than previous max %g " % (j,W.scores_data_ptr[j], best_true_score))
+                        best_true_row = j
+                        best_true_score = W.scores_data_ptr[j]
+                        if verbose > 1:
+                            print ("best_true_row=%d  best_true_score=%g" % (best_true_row,best_true_score))
+                else:
+                    if verbose > 1:
+                        print ("Comparing outside class on row %d with score %g " % (j,W.scores_data_ptr[j]))
+                    # not within class
+                    if W.scores_data_ptr[j] > best_off_score:
+                        if verbose > 1:
+                            print ("Outside class: row %d score %g is bigger than previous max %g " % (j,W.scores_data_ptr[j], best_off_score))
+                            
+                        best_off_row = j
+                        best_off_score = W.scores_data_ptr[j]
+                        if verbose > 1:
+                            print ("best_off_row=%d  best_off_score=%g" % (best_off_row,best_off_score))
+
+                            
+                            
+            if use_hinge > 0:
+                if best_off_score - best_true_score > -1:
+                    do_update = 1
+                else:
+                    do_update = 0
+            else:
+                if (best_off_score - best_true_score > -1) and (
+                        best_off_score -best_true_score < 1):
+                    do_update = 1
+                else:
+                    do_update = 0
+
+
+            scaling = 1./(t+(<double>i)/time_scaling)
+            W.scale( (1.0- scaling))
+            if verbose > 1:
+                print ("1-scaling=%g\t W.scaling=%g" % (1.0-scaling,W.Wscale))
+
+            if do_update > 0:
+            
+                if verbose > 1:
+                    print ("Loss exceeded -1-- doing update -W.scaling=%g" % W.Wscale)
+                eta = scaling/lambda_param
+                if verbose > 1:
+                    print ("eta=%g" % eta)
+                if verbose > 1:
+                    for j in range(W.n_features):
+                        print ("W[%d,%d] = %g" % (best_true_row,j,
+                                              (W.W_data_ptr + best_true_row * W.n_features)[j]*W.Wscale))
+
+
+                W.binary_add(best_true_row,x_ind_ptr,xnnz,eta)
+                if verbose > 1:
+                    for j in range(W.n_features):
+                        print ("W[%d,%d] = %g" % (best_true_row,j,
+                                              (W.W_data_ptr + best_true_row * W.n_features)[j]*W.Wscale))
+
+                    print " "
+                               
+                eta *= -1.0
+                if verbose > 1:
+                    for j in range(W.n_features):
+                        print ("W[%d,%d] = %g" % (best_off_row,j,
+                                              (W.W_data_ptr + best_off_row * W.n_features)[j]*W.Wscale))
+
+
+
+                W.binary_add(best_off_row,x_ind_ptr,xnnz,eta)
+                if verbose > 1:
+                    for j in range(W.n_features):
+                        print ("W[%d,%d] = %g" % (best_off_row,j,
+                                              (W.W_data_ptr + best_off_row * W.n_features)[j]*W.Wscale))
+
+
+            if do_projection > 0:
+                scaling = oneoversqrtlambda/sqrt(W.sq_norm)
+                if scaling < 1.0:
+                    W.scale(scaling)
+
+
+    cdef np.ndarray[ndim=2,dtype=double] out_weights = np.zeros((W.n_components,W.n_features),dtype=np.float)
+    cdef double * cur_data_ptr = W.W_data_ptr
+    for i in range(W.n_components):
+        cur_data_ptr = <double *>(W.W_data_ptr + i*W.n_features)
+        for j in range(W.n_features):
+            out_weights[i,j] = cur_data_ptr[j] * W.Wscale
+
+
+    return out_weights
+            
+
+
+def multiclass_smoothed_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
+                   np.ndarray[int, ndim=1, mode='c'] weights_classes,
+                   np.ndarray[int, ndim=1, mode='c'] weights_components,
+                   int n_classes,
+                   BinaryArrayDataset dataset, int seed, int n_iter,
+                   int shuffle,
+                   int verbose,
+                   double start_t,
+                   double lambda_param,
+                            int do_projection, double time_scaling,
+                            double gamma, double beta):
     cdef Py_ssize_t n_samples = dataset.n_samples
 
     print n_samples
@@ -359,7 +676,14 @@ def multiclass_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
     cdef int *x_ind_ptr = NULL
     cdef short int y = 0
     cdef int xnnz, best_true_row, best_off_row
-    cdef double best_true_score, best_off_score, scaling
+    cdef double best_true_score, best_off_score, scaling, add_scaling
+    cdef double off_score_normalization, true_score_normalization
+    #
+    cdef int n_use_off_scores, n_use_true_scores, use_off_scores_idx, use_true_scores_idx
+    cdef np.ndarray[ndim=1,dtype=int] use_off_score_ids = np.zeros(n_components,dtype=np.intc)
+    cdef np.ndarray[ndim=1,dtype=double] use_off_scores = np.zeros(n_components,dtype=np.float)
+    cdef np.ndarray[ndim=1,dtype=int] use_true_score_ids = np.zeros(n_components,dtype=np.intc)
+    cdef np.ndarray[ndim=1,dtype=double] use_true_scores = np.zeros(n_components,dtype=np.float)
     cdef double eta, t, oneoversqrtlambda
     
     oneoversqrtlambda = 1./sqrt(lambda_param)
@@ -378,12 +702,15 @@ def multiclass_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
         if shuffle > 0:
             dataset.shuffle(seed)
         for i in range(n_samples):
+            if verbose > 1:
+                print ("\n\n-----Workign on sample %d------" % i)
             if i % 5000 == 0:
                 print i
             dataset.next( & x_ind_ptr, & xnnz, & y)
 
             W.dot( x_ind_ptr, xnnz)
-            
+            if verbose > 1:
+                print ("y = %d" % y)
             if y == 0:
                 best_true_row = 0
                 best_off_row = W.class_row_idx_ptr[1]
@@ -392,7 +719,8 @@ def multiclass_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
                 best_off_row = 0
                 best_true_row = W.class_row_idx_ptr[y]
 
-
+            if verbose > 1:
+                print ("Initial best_true_row= %d\t best_off_row=%d" % (best_true_row,best_off_row))
                 
             # initialize the estimated best scores for updates
             best_true_score = W.scores_data_ptr[best_true_row]
@@ -403,28 +731,157 @@ def multiclass_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
 
                 
                 if W.W_classes_ptr[j] == y:
+                    if verbose > 1:
+                        print ("Within class Comparing within class on row %d with score %g " % (j,W.scores_data_ptr[j]))
                     # within class 
                     if W.scores_data_ptr[j] > best_true_score:
+                        
+                        if verbose > 1:
+                            print ("row %d score %g is bigger than previous max %g " % (j,W.scores_data_ptr[j], best_true_score))
                         best_true_row = j
                         best_true_score = W.scores_data_ptr[j]
+                        if verbose > 1:
+                            print ("best_true_row=%d  best_true_score=%g" % (best_true_row,best_true_score))
                 else:
+                    if verbose > 1:
+                        print ("Comparing outside class on row %d with score %g " % (j,W.scores_data_ptr[j]))
                     # not within class
                     if W.scores_data_ptr[j] > best_off_score:
+                        if verbose > 1:
+                            print ("Outside class: row %d score %g is bigger than previous max %g " % (j,W.scores_data_ptr[j], best_off_score))
+                            
                         best_off_row = j
                         best_off_score = W.scores_data_ptr[j]
+                        if verbose > 1:
+                            print ("best_off_row=%d  best_off_score=%g" % (best_off_row,best_off_score))
 
+            # first part of update is just a rescaling of the weights
 
-            scaling = 1./t
+            scaling = 1./(t+pow(2.0,<double>epoch))
             W.scale( (1.0- scaling))
-            eta = scaling/lambda_param
-            W.binary_add(best_true_row,x_ind_ptr,xnnz,eta)
-            eta *= -1.0
-            W.binary_add(best_off_row,x_ind_ptr,xnnz,eta)
+            if verbose > 1:
+                print ("scaling=%g\t W.scaling=%g" % (scaling,W.Wscale))
+
+
+            # now we find whether to do an update
+            if (1.0 + best_off_score - best_true_score)/gamma > LOGEPSILON:
+
+                off_score_normalization = exp(-(1.0+best_off_score-best_true_score)/gamma)
+                true_score_normalization = 0.0
+                n_use_off_scores = 0
+                n_use_true_scores = 0
+                # find the best row for both
+                for j in range(W.n_components):            
+                    if W.W_classes_ptr[j] == y:
+                        # if verbose > 1:
+                        #     print ("Within class Comparing within class on row %d with score %g " % (j,W.scores_data_ptr[j]))
+                        # within class 
+                        add_scaling = (W.scores_data_ptr[j] - best_true_score)/beta
+                        if add_scaling  > LOGEPSILON:
+                            use_true_scores[n_use_true_scores] = exp(add_scaling)
+                            true_score_normalization += use_true_scores[n_use_true_scores]
+                            use_true_score_ids[n_use_true_scores] = j
+                            n_use_true_scores += 1
+                            
+                            # if verbose > 1:
+                            #     print ("row %d score %g is bigger than previous max %g " % (j,W.scores_data_ptr[j], best_true_score))
+                    else:
+                        # if verbose > 1:
+                        #     print ("Comparing outside class on row %d with score %g " % (j,W.scores_data_ptr[j]))
+                        # not within class
+                        add_scaling = (W.scores_data_ptr[j] - best_off_score )/gamma
+                        if add_scaling > LOGEPSILON:
+                            # if verbose > 1:
+                            #     print ("Outside class: row %d score %g is bigger than previous max %g " % (j,W.scores_data_ptr[j], best_off_score))
+                            use_off_scores[n_use_off_scores] = exp(add_scaling)
+                            use_off_score_ids[n_use_off_scores] = j
+                            off_score_normalization += use_off_scores[n_use_off_scores]
+                            n_use_off_scores += 1
+                                
+                            # if verbose > 1:
+                            #     print ("best_off_row=%d  best_off_score=%g" % (best_off_row,best_off_score))
+                    
+                eta = scaling/lambda_param
+                for j in range(n_use_true_scores):
+                    add_scaling = eta*use_true_scores[j]
+                    if add_scaling > EPSILON * true_score_normalization:
+                        W.binary_add(use_true_score_ids[j],
+                                     x_ind_ptr,xnnz,add_scaling/true_score_normalization)
+
+
+                for j in range(n_use_off_scores):
+                    add_scaling = eta*use_off_scores[j]
+                    if add_scaling > EPSILON * off_score_normalization:
+                        W.binary_add(use_off_score_ids[j],
+                                 x_ind_ptr,xnnz,-add_scaling/off_score_normalization)
+
+                            
 
             if do_projection > 0:
                 scaling = oneoversqrtlambda/sqrt(W.sq_norm)
                 if scaling < 1.0:
                     W.scale(scaling)
 
-    return W.W
+
+    cdef np.ndarray[ndim=2,dtype=double] out_weights = np.zeros((W.n_components,W.n_features),dtype=np.float)
+    cdef double * cur_data_ptr = W.W_data_ptr
+    for i in range(W.n_components):
+        cur_data_ptr = <double *>(W.W_data_ptr + i*W.n_features)
+        for j in range(W.n_features):
+            out_weights[i,j] = cur_data_ptr[j] * W.Wscale
+    return out_weights
+
+        
             
+# def multiclass_SAG_smoothed_hinge(
+#         np.ndarray[double, ndim=1, mode='c'] weights,
+#         np.ndarray[int, ndim=1, mode='c'] weights_classes,
+#         np.ndarray[int, ndim=1, mode='c'] weights_components,
+#         int n_classes,
+#         BinaryArrayDataset, int seed, int n_iter,
+#         int shuffle,
+#         int verbose,
+#         double lambda_param):
+#     """
+#     """
+#     cdef Py_ssize_t n_samples = dataset.n_samples
+
+#     print ("n_samples = %d" % n_samples)
+
+#     cdef MultiWeightMatrix W = MultiWeightMatrix(weights,weights_classes, weights_components, n_classes)
+
+#     print ("sq_norm = %g" % W.sq_norm)
+    
+#     cdef Py_ssize_t n_components = W.n_components
+#     cdef int *x_ind_ptr = NULL
+#     cdef short int y = 0
+#     cdef int xnnz
+
+#     cdef double eta
+#     cdef int i, j
+
+
+#     # get the SAG initializations
+#     cdef np.ndarray[ndim=1,dtype=np.uint8_t,order='c'] visted_node = np.zeros(n_samples,dtype=np.uint8)
+#     cdef int num_visted = 0
+
+#     cdef np.ndarray[ndim=1,dtype=double,order='c'] cumulative_steps = np.zeros(n_samples+1,dtype=np.float)
+#     cdef np.ndarray[ndim=1,dtype=int,order='c'] prev_non_zero_step = np.zeros(W.n_features,dtype=np.intc)
+
+#     cdef double * cur_data_ptr 
+
+#     for epoch in range(n_iter):
+#         if verbose > 0:
+#             print ("-- Epoch %d" % epoch)
+#         if shuffle > 0:
+#             dataset.shuffle(seed)
+
+#         cumulative_steps[0] = cumulative_steps[n_samples]
+#         for j in xrange(W.n_features):
+#             prev_non_zero_step[j] = 0
+
+#         for i in xrange(W.n_components):
+#             cur_data_ptr = <double *>(W.W_data_ptr + i*W.n_features)
+#             for j in xrange(W.n_features):
+                
+        
