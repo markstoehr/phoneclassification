@@ -178,3 +178,55 @@ python $local/simple_train_multicomponent_pegasos.py --root_dir /home/mark/Resea
   -l .05 .01 .1 .5 .005 .0001 \
   --eta .1 \
   -T 100000 100000 100000 100000 100000
+
+python $local/further_updates_train_multicomponent_pegasos.py --root_dir /home/mark/Research/phoneclassification \
+  --data_dir data/local/data \
+  --W $exp/multicomponent_pegasos_6C_0.05l_500000T_W.npy \
+  --model_meta $exp/meta_6C.npy \
+  --save_prefix $exp/multicomponent_pegasos_6C \
+  --start_t 500001 \
+  -l .05 \
+  --eta .1 \
+  -T 100000 100000 100000 100000 100000
+
+
+python $local/simple_train_multicomponent_pegasos.py --root_dir /home/mark/Research/phoneclassification \
+  --data_dir data/local/data \
+  --model_avgs $exp/avgs_6C.npy \
+  --model_meta $exp/meta_6C.npy \
+  --save_prefix $exp/multicomponent_pegasos_6C \
+  -l .1 \
+  --eta .1 \
+  -T 100000 100000 100000 100000 100000
+
+
+python $local/further_updates_train_multicomponent_pegasos.py --root_dir /home/mark/Research/phoneclassification \
+  --data_dir data/local/data \
+  --W $exp/multicomponent_pegasos_6C_0.1l_500000T_W.npy \
+  --model_meta $exp/meta_6C.npy \
+  --save_prefix $exp/multicomponent_pegasos_6C \
+  --start_t 500001 \
+  -l .1 \
+  --eta .1 \
+  -T 100000 100000 100000 100000 100000
+
+python $local/further_updates_train_multicomponent_pegasos.py --root_dir /home/mark/Research/phoneclassification \
+  --data_dir data/local/data \
+  --W $exp/multicomponent_pegasos_6C_0.01l_500000T_W.npy \
+  --model_meta $exp/meta_6C.npy \
+  --save_prefix $exp/multicomponent_pegasos_6C \
+  --start_t 500001 \
+  -l .01 \
+  --eta .1 \
+  -T 100000 100000 100000 100000 100000
+
+
+python $local/simple_train_multicomponent_pegasos.py --root_dir /home/mark/Research/phoneclassification \
+  --data_dir data/local/data \
+  --model_avgs $exp/avgs_9C.npy \
+  --model_meta $exp/meta_9C.npy \
+  --save_prefix $exp/multicomponent_pegasos_9C \
+  -l .05 .01 .1 .005 .0001 \
+  --eta .1 \
+  -T 100000 100000 100000 100000 100000 100000 100000 100000 100000
+
