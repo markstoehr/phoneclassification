@@ -15,3 +15,8 @@ mkdir -p $plots
 python local/pyscat_multiclass_pegasos_experiment.py --root_dir /var/tmp/stoehr/phoneclassification \
   --data_dir data \
   --exp_dir $exp
+
+python local/edges_multiclass_kernel_ah_ih_training.py --root_dir /var/tmp/stoehr/phoneclassification \
+  --data_dir data/local/data \
+  --exp_dir $exp
+

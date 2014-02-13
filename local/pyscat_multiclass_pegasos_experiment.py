@@ -2,7 +2,7 @@ from __future__ import division
 import numpy as np
 import argparse
 from phoneclassification.pegasos import multiclass
-
+from sklearn.svm import SVC
 
 parser = argparse.ArgumentParser("""File to run a basic test of the pegasos multiclass
 SVM solver over the scattering features""")
@@ -28,6 +28,7 @@ leehon_dict = dict( (phones48_dict[p],
 
 nobs = np.zeros(len(leehon[:,0]))
 for phone_id, phone in enumerate(leehon[:,0]):
+    
     X = np.loadtxt('%s/msc_features_13t_40f_%s_0.dat' % (datadir,phone))
     nobs[phone_id] = X.shape[0]
     dim = np.prod(X.shape[1:])
