@@ -178,3 +178,146 @@ python $local/simple_train_multicomponent_pegasos.py --root_dir /home/mark/Resea
   -l .05 .01 .1 .5 .005 .0001 \
   --eta .1 \
   -T 100000 100000 100000 100000 100000
+
+# now we test
+python $local/test_pegasos_svm_simple.py --root_dir /home/mark/Research/phoneclassification \
+  --data_dir data/local/data \
+  --W $exp/multicomponent_pegasos_6C_0.05l_100000T_W.npy \
+  --W_meta $exp/meta_6C.npy \
+  --out_results_prefix $exp/multicomponent_pegasos_6C_0.05l_100000T
+
+python $local/test_pegasos_svm_simple.py --root_dir /home/mark/Research/phoneclassification \
+  --data_dir data/local/data \
+  --W $exp/multicomponent_pegasos_6C_0.05l_200000T_W.npy \
+  --W_meta $exp/meta_6C.npy \
+  --out_results_prefix $exp/multicomponent_pegasos_6C_0.05l_200000T
+
+python $local/test_pegasos_svm_simple.py --root_dir /home/mark/Research/phoneclassification \
+  --data_dir data/local/data \
+  --W $exp/multicomponent_pegasos_6C_0.05l_300000T_W.npy \
+  --W_meta $exp/meta_6C.npy \
+  --out_results_prefix $exp/multicomponent_pegasos_6C_0.05l_300000T
+
+python $local/test_pegasos_svm_simple.py --root_dir /home/mark/Research/phoneclassification \
+  --data_dir data/local/data \
+  --W $exp/multicomponent_pegasos_6C_0.05l_400000T_W.npy \
+  --W_meta $exp/meta_6C.npy \
+  --out_results_prefix $exp/multicomponent_pegasos_6C_0.05l_400000T
+
+python $local/test_pegasos_svm_simple.py --root_dir /home/mark/Research/phoneclassification \
+  --data_dir data/local/data \
+  --W $exp/multicomponent_pegasos_6C_0.05l_500000T_W.npy \
+  --W_meta $exp/meta_6C.npy \
+  --out_results_prefix $exp/multicomponent_pegasos_6C_0.05l_500000T
+
+python $local/test_pegasos_svm_simple.py --root_dir /home/mark/Research/phoneclassification \
+  --data_dir data/local/data \
+  --W $exp/multicomponent_pegasos_6C_0.05l_600000T_W.npy \
+  --W_meta $exp/meta_6C.npy \
+  --out_results_prefix $exp/multicomponent_pegasos_6C_0.05l_600000T
+
+python $local/test_pegasos_svm_simple.py --root_dir /home/mark/Research/phoneclassification \
+  --data_dir data/local/data \
+  --W $exp/multicomponent_pegasos_6C_0.05l_700000T_W.npy \
+  --W_meta $exp/meta_6C.npy \
+  --out_results_prefix $exp/multicomponent_pegasos_6C_0.05l_700000T
+
+python $local/test_pegasos_svm_simple.py --root_dir /home/mark/Research/phoneclassification \
+  --data_dir data/local/data \
+  --W $exp/multicomponent_pegasos_6C_0.05l_800000T_W.npy \
+  --W_meta $exp/meta_6C.npy \
+  --out_results_prefix $exp/multicomponent_pegasos_6C_0.05l_800000T
+
+python $local/test_pegasos_svm_simple.py --root_dir /home/mark/Research/phoneclassification \
+  --data_dir data/local/data \
+  --W $exp/multicomponent_pegasos_6C_0.01l_100000T_W.npy \
+  --W_meta $exp/meta_6C.npy \
+  --out_results_prefix $exp/multicomponent_pegasos_6C_0.01l_100000T
+
+python $local/test_pegasos_svm_simple.py --root_dir /home/mark/Research/phoneclassification \
+  --data_dir data/local/data \
+  --W $exp/multicomponent_pegasos_6C_0.01l_200000T_W.npy \
+  --W_meta $exp/meta_6C.npy \
+  --out_results_prefix $exp/multicomponent_pegasos_6C_0.01l_200000T
+
+python $local/test_pegasos_svm_simple.py --root_dir /home/mark/Research/phoneclassification \
+  --data_dir data/local/data \
+  --W $exp/multicomponent_pegasos_6C_0.01l_300000T_W.npy \
+  --W_meta $exp/meta_6C.npy \
+  --out_results_prefix $exp/multicomponent_pegasos_6C_0.01l_300000T
+
+python $local/test_pegasos_svm_simple.py --root_dir /home/mark/Research/phoneclassification \
+  --data_dir data/local/data \
+  --W $exp/multicomponent_pegasos_6C_0.01l_400000T_W.npy \
+  --W_meta $exp/meta_6C.npy \
+  --out_results_prefix $exp/multicomponent_pegasos_6C_0.01l_400000T
+
+python $local/test_pegasos_svm_simple.py --root_dir /home/mark/Research/phoneclassification \
+  --data_dir data/local/data \
+  --W $exp/multicomponent_pegasos_6C_0.01l_500000T_W.npy \
+  --W_meta $exp/meta_6C.npy \
+  --out_results_prefix $exp/multicomponent_pegasos_6C_0.01l_500000T
+
+for i in 1 2 3 4 5 ; do
+echo $i
+python $local/test_pegasos_svm_simple.py --root_dir /home/mark/Research/phoneclassification \
+  --data_dir data/local/data \
+  --W $exp/multicomponent_pegasos_9C_0.05l_${i}00000T_W.npy \
+  --W_meta $exp/meta_9C.npy \
+  --out_results_prefix $exp/multicomponent_pegasos_9C_0.05l_${i}00000T
+done
+
+for i in 1 2 3 4 5 ; do
+echo $i
+python $local/test_pegasos_svm_simple.py --root_dir /home/mark/Research/phoneclassification \
+  --data_dir data/local/data \
+  --W $exp/multicomponent_pegasos_6C_0.1l_${i}00000T_W.npy \
+  --W_meta $exp/meta_6C.npy \
+  --out_results_prefix $exp/multicomponent_pegasos_6C_0.1l_${i}00000T
+done
+
+for i in 11 12 13 14 15 ; do
+echo $i
+python $local/test_pegasos_svm_simple.py --root_dir /home/mark/Research/phoneclassification \
+  --data_dir data/local/data \
+  --W $exp/multicomponent_pegasos_6C_0.05l_${i}00000T_W.npy \
+  --W_meta $exp/meta_6C.npy \
+  --out_results_prefix $exp/multicomponent_pegasos_6C_0.05l_${i}00000T
+done
+
+
+for i in 6 7 8 9 10 ; do
+echo $i
+python $local/test_pegasos_svm_simple.py --root_dir /home/mark/Research/phoneclassification \
+  --data_dir data/local/data \
+  --W $exp/multicomponent_pegasos_6C_0.01l_${i}00000T_W.npy \
+  --W_meta $exp/meta_6C.npy \
+  --out_results_prefix $exp/multicomponent_pegasos_6C_0.01l_${i}00000T
+done
+
+for i in 6 7 8 9 ; do
+echo $i
+python $local/test_pegasos_svm_simple.py --root_dir /home/mark/Research/phoneclassification \
+  --data_dir data/local/data \
+  --W $exp/multicomponent_pegasos_9C_0.05l_${i}00000T_W.npy \
+  --W_meta $exp/meta_9C.npy \
+  --out_results_prefix $exp/multicomponent_pegasos_9C_0.05l_${i}00000T
+done
+
+for i in 1 2 3 4 5 6 7  ; do
+echo $i
+python $local/test_pegasos_svm_simple.py --root_dir /home/mark/Research/phoneclassification \
+  --data_dir data/local/data \
+  --W $exp/multicomponent_pegasos_9C_0.01l_${i}00000T_W.npy \
+  --W_meta $exp/meta_9C.npy \
+  --out_results_prefix $exp/multicomponent_pegasos_9C_0.01l_${i}00000T
+done
+
+
+python $local/fast_train_multicomponent_pegasos.py --root_dir /home/mark/Research/phoneclassification \
+  --data_dir data/local/data \
+  --model_avgs $exp/avgs_6C.npy \
+  --model_meta $exp/meta_6C.npy \
+  --save_prefix $exp/multicomponent_pegasos_6C \
+  -l .05 .01 .1 .5 .005 .0001 \
+  --niter 3
