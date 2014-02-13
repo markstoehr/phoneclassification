@@ -21,12 +21,12 @@ def get_maximal_patches(X,S,patch_radius=2):
     edge_arr_sums = edge_arr_view.sum(-1).sum(-1).sum(-1)
     edge_local_maxes = maximum_filter(edge_arr_sums,size=(k,k),cval=0,mode='constant')
     local_max_patches = edge_arr_view[edge_arr_sums >= edge_local_maxes]
-    
-    spec_sub_shape = (k,k) 
+
+    spec_sub_shape = (k,k)
 
     spec_view_shape=tuple(np.subtract(S.shape,spec_sub_shape)+1)+spec_sub_shape
     spec_arr_view=np.lib.stride_tricks.as_strided(S,spec_view_shape,S.strides *2 )
-    
+
     return local_max_patches, spec_arr_view[edge_arr_sums >= edge_local_maxes]
 
 
@@ -47,11 +47,12 @@ def main(args):
     all_X_patches = []
     all_S_patches = []
     for phn_id, (fl_edge, fl_spec) in enumerate(itertools.izip(args.data,args.data_spec)):
+        if len(all_X_patches) > 100000: break
         print phn_id
 
         X = np.load(fl_edge)
         X_shape = X.shape[1:]
-        
+
         S = np.load(fl_spec)
 
 
@@ -74,12 +75,12 @@ def main(args):
     data_shape = X.shape[1:]
     X = X.reshape(X.shape[0],np.prod(data_shape))
     bmm = bernoullimm.BernoulliMM(n_components=args.n_components,
-                                  n_init= 3,
-                                  n_iter= 200,
+                                  n_init= 20,
+                                  n_iter= 500,
                                   random_state=0,
-                                  verbose=args.v)
+                                  verbose=args.v, tol=1e-6)
     bmm.fit(X)
-        
+
     # check above 30
     use_means = bmm.predict_proba(X).sum(0) > 30
     print use_means.sum()
@@ -94,7 +95,7 @@ def main(args):
 
     ncols = int(np.sqrt(args.n_components))
     nrows = int(np.ceil(args.n_components/ncols))
-    
+
 
     if args.viz_spec_parts is not None:
         plt.close('all')
@@ -124,21 +125,21 @@ def main(args):
             grid[i].spines['top'].set_color('red')
             grid[i].spines['left'].set_color('red')
             grid[i].spines['right'].set_color('red')
-        
+
             for a in grid[i].axis.values():
                 a.toggle(all=False)
-                
+
         plt.savefig('%s' % args.viz_spec_parts
                                            ,bbox_inches='tight')
 
 
-        
-        
-        
 
 
 
-        
+
+
+
+
 
 
 if __name__=="__main__":
