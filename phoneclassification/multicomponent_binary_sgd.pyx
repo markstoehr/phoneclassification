@@ -184,6 +184,9 @@ cdef class MultiWeightMatrix(object):
     cdef int * class_n_components_ptr
     cdef np.ndarray class_row_idx
     cdef int * class_row_idx_ptr
+    
+    # keep track of the averaged gradient
+    
 
     # smoothed loss gradient and assignment parameters
     cdef double gamma, beta
@@ -275,7 +278,7 @@ cdef class MultiWeightMatrix(object):
             else:
                 nrow_components += 1
 
-        self.class_n_components_ptr[W_classes[i-1]] = nrow_components
+        self.class_n_components_ptr[W_classes[self.n_components-1]] = nrow_components
 
         self.beta = beta
         self.gamma = gamma
@@ -668,7 +671,7 @@ def multiclass_smoothed_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
     cdef Py_ssize_t n_samples = dataset.n_samples
 
     print n_samples
-    cdef MultiWeightMatrix W = MultiWeightMatrix(weights,weights_classes, weights_components, n_classes)
+    cdef MultiWeightMatrix W = MultiWeightMatrix(weights,weights_classes, weights_components, n_classes, gamma, beta)
 
     print ("sq_norm = %g" % W.sq_norm)
     
@@ -757,7 +760,7 @@ def multiclass_smoothed_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
 
             # first part of update is just a rescaling of the weights
 
-            scaling = 1./(t+pow(2.0,<double>epoch))
+            scaling = 1./(t+<double>i)
             W.scale( (1.0- scaling))
             if verbose > 1:
                 print ("scaling=%g\t W.scaling=%g" % (scaling,W.Wscale))
@@ -831,8 +834,67 @@ def multiclass_smoothed_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
             out_weights[i,j] = cur_data_ptr[j] * W.Wscale
     return out_weights
 
+cdef void _sparse_dot(int *X_indices_ptr, int *rownnz,
+                      int* rowstartidx, int X_n_rows, double *w_ptr, double *z_ptr) nogil:
+    """
+    """
+    cdef int i,j, idx
+    cdef int *cur_X_ptr = <int *>X_indices_ptr
+    for i in range(X_n_rows):
+        z_ptr[i] = 0.0
+        for j in range(rownnz[i]):
+            idx = cur_X_ptr[j]
+            z_ptr[i] += w_ptr[idx]
+
+        cur_X_ptr += rownnz[i]
+
+cdef void _sparse_dotmm(int *X_indices_ptr, int *rownnz,
+                        int* rowstartidx, int X_n_rows, double *w_ptr, double *z_ptr, int D, int K) nogil:
+    """
+    """
+    cdef int i,j, k, z_idx, idx
+    cdef int *cur_X_ptr = <int *>X_indices_ptr
+    cdef double *cur_w_ptr = <double *>w_ptr
+    z_idx = 0
+    for i in range(X_n_rows):
+        cur_w_ptr = <double *>w_ptr
+        for k in range(K):
+            z_ptr[z_idx] = 0.0
+            for j in range(rownnz[i]):
+                idx = cur_X_ptr[j]
+                z_ptr[z_idx] += cur_w_ptr[idx]
+
+            z_idx += 1
+            cur_w_ptr += D
+
+        cur_X_ptr += rownnz[i]
         
-            
+    
+def sparse_dot(np.ndarray[int,ndim=1,mode='c'] X_indices,
+               np.ndarray[int,ndim=1, mode='c'] rownnz,
+               np.ndarray[int, ndim=1, mode='c'] rowstartidx,
+               np.ndarray[double,ndim=1,mode='c'] w,
+               np.ndarray[double,ndim=1,mode='c'] z,
+               int X_n_rows):
+    _sparse_dot(<int *> X_indices.data, <int *> rownnz.data,
+                <int *> rowstartidx.data, 
+                X_n_rows,<double *>w.data,
+                <double *>z.data)
+
+def sparse_dotmm(np.ndarray[int,ndim=1,mode='c'] X_indices,
+               np.ndarray[int,ndim=1, mode='c'] rownnz,
+               np.ndarray[int, ndim=1, mode='c'] rowstartidx,
+               np.ndarray[double,ndim=1,mode='c'] w,
+                 int X_n_rows,
+                 int D,
+                 int K):
+    cdef np.ndarray[double,ndim=1,mode="c"] z = np.zeros(X_n_rows*K,dtype=np.float)
+    _sparse_dotmm(<int *> X_indices.data, <int *> rownnz.data,
+                <int *> rowstartidx.data, 
+                X_n_rows,<double *>w.data,
+                  <double *>z.data, D, K)
+    return z.reshape(X_n_rows,K)
+    
 # def multiclass_SAG_smoothed_hinge(
 #         np.ndarray[double, ndim=1, mode='c'] weights,
 #         np.ndarray[int, ndim=1, mode='c'] weights_classes,
