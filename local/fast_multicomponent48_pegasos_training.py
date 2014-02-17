@@ -2,7 +2,7 @@ from __future__ import division
 from phoneclassification.confusion_matrix import confusion_matrix
 import numpy as np
 import argparse,collections
-from phoneclassification.multicomponent_binary_sgd import BinaryArrayDataset, multiclass_sgd
+from phoneclassification.multicomponent_binary_sgd import BinaryArrayDataset, multiclass_sgd, sparse_dot
 from MulticlassPegasos.binary_sgd import binary_to_bsparse
 
 
@@ -39,6 +39,10 @@ parser.add_argument('--root_dir',default='/home/mark/Research/phoneclassificatio
 parser.add_argument('--data_dir',default='data/local/data',type=str,
                     help='relative path to where the data is kept')
 
+parser.add_argument('--use_sparse_suffix',default=None,
+                    type=str,help='If not included then we do not assume a sparse save structure for the data otherwise this is the suffix for where the data are stored in sparse format')
+parser.add_argument('--dev_sparse_suffix',default=None,
+                    type=str,help='If not included then we do not assume a sparse save structure for the data otherwise this is the suffix for where the data are stored in sparse format')
 
 parser.add_argument('--model_avgs',type=str,help='path to where the models are saved that have been initialized')
 parser.add_argument('--model_W',type=str,default=None,
@@ -81,41 +85,80 @@ for phn in leehon[:,0]:
 use_phns39 = list(phones39[:])
 use_phns48 = leehon[:,0]
 
-nobs = np.zeros(len(use_phns48))
-for phone_id, phone in enumerate(use_phns48):    
-    X = np.load('%s/%s_train_examples.npy' % (datadir,phone))
-    nobs[phone_id] = X.shape[0]
-    dim = np.prod(X.shape[1:])
-    print dim
+if args.use_sparse_suffix is None:
+    nobs = np.zeros(len(use_phns48))
+    for phone_id, phone in enumerate(use_phns48):    
+        X = np.load('%s/%s_train_examples.npy' % (datadir,phone))
+        nobs[phone_id] = X.shape[0]
+        dim = np.prod(X.shape[1:])
+        print dim
 
-X = np.ones((nobs.sum(),dim+1),dtype=np.uint8)
-y = np.zeros(nobs.sum(),dtype=int)
-y39 = np.zeros(nobs.sum(),dtype=int)
-curobs=0
-for phone_id, phone in enumerate(use_phns48):
-    X[curobs:curobs+nobs[phone_id],:-1] = np.load('%s/%s_train_examples.npy' % (datadir,phone)).reshape(nobs[phone_id],dim)
-    y[curobs:curobs+nobs[phone_id]] = phone_id
-    y39[curobs:curobs+nobs[phone_id]] = leehon_dict[phone_id]
-    curobs += nobs[phone_id]
+    X = np.ones((nobs.sum(),dim+1),dtype=np.uint8)
+    y = np.zeros(nobs.sum(),dtype=int)
+    y39 = np.zeros(nobs.sum(),dtype=int)
+    curobs=0
+    for phone_id, phone in enumerate(use_phns48):
+        X[curobs:curobs+nobs[phone_id],:-1] = np.load('%s/%s_train_examples.npy' % (datadir,phone)).reshape(nobs[phone_id],dim)
+        y[curobs:curobs+nobs[phone_id]] = phone_id
+        y39[curobs:curobs+nobs[phone_id]] = leehon_dict[phone_id]
+        curobs += nobs[phone_id]
+    
+    
+    nobs = np.zeros(len(use_phns48))
+    for phone_id, phone in enumerate(use_phns48):    
+        X_test = np.load('%s/%s_dev_examples.npy' % (datadir,phone))
+        nobs[phone_id] = X_test.shape[0]
+        dim = np.prod(X_test.shape[1:])
+        print dim
 
 
-nobs = np.zeros(len(use_phns48))
-for phone_id, phone in enumerate(use_phns48):    
-    X_test = np.load('%s/%s_dev_examples.npy' % (datadir,phone))
-    nobs[phone_id] = X_test.shape[0]
-    dim = np.prod(X_test.shape[1:])
-    print dim
+    X_test = np.ones((nobs.sum(),dim+1),dtype=np.uint8)
+    y_test = np.zeros(nobs.sum(),dtype=int)
+    y_test39 = np.zeros(nobs.sum(),dtype=int)
+    curobs=0
+    for phone_id, phone in enumerate(use_phns48):
+        X_test[curobs:curobs+nobs[phone_id],:-1] = np.load('%s/%s_dev_examples.npy' % (datadir,phone)).reshape(nobs[phone_id],dim)
+        y_test[curobs:curobs+nobs[phone_id]] = phone_id
+        y_test39[curobs:curobs+nobs[phone_id]] = leehon_dict[phone_id]
+        curobs += nobs[phone_id]
 
+    feature_ind, rownnz, rowstartidx = binary_to_bsparse(X)
+    feature_ind = feature_ind[:,1].copy()
+    y = y.astype(np.int16) 
+    
+    test_accuracy = lambda W : np.sum(leehon_dict_array[weights_classes[np.dot(X_test,W.T).argmax(1)]] == y_test39)/float(len(y_test39))
 
-X_test = np.ones((nobs.sum(),dim+1),dtype=np.uint8)
-y_test = np.zeros(nobs.sum(),dtype=int)
-y_test39 = np.zeros(nobs.sum(),dtype=int)
-curobs=0
-for phone_id, phone in enumerate(use_phns48):
-    X_test[curobs:curobs+nobs[phone_id],:-1] = np.load('%s/%s_dev_examples.npy' % (datadir,phone)).reshape(nobs[phone_id],dim)
-    y_test[curobs:curobs+nobs[phone_id]] = phone_id
-    y_test39[curobs:curobs+nobs[phone_id]] = leehon_dict[phone_id]
-    curobs += nobs[phone_id]
+else:
+    feature_ind = np.load('%sX_indices_%s' % (args.data_dir,
+                                              args.use_sparse_suffix),
+                          )
+    rownnz = np.load('%sX_rownnz_%s' % (args.data_dir,
+                                              args.use_sparse_suffix),
+                          )
+    X_n_rows = rownnz.shape[0]
+    rowstartidx = np.load('%sX_rowstartidx_%s' % (args.data_dir,
+                                              args.use_sparse_suffix),
+                          )
+    y = np.load('%sy_%s' % (args.data_dir,
+                                              args.use_sparse_suffix),
+                          ).astype(np.int16)
+
+    feature_ind_test = np.load('%sX_indices_%s' % (args.data_dir,
+                                              args.dev_sparse_suffix),
+                          )
+    rownnz_test = np.load('%sX_rownnz_%s' % (args.data_dir,
+                                              args.dev_sparse_suffix),
+                          )
+    rowstartidx_test = np.load('%sX_rowstartidx_%s' % (args.data_dir,
+                                              args.dev_sparse_suffix),
+                           )
+    
+    y_test = np.load('%sy_%s' % (args.data_dir,
+                                              args.dev_sparse_suffix),
+                          ).astype(np.int16)
+    y_test39 = np.array([ leehon_dict[phone_id] for phone_id in y_test]).astype(np.int16)
+    test_accuracy = lambda W : np.sum(leehon_dict_array[weights_classes[sparse_dotmm(feature_ind_test,rownnz_test,rowstartidx_test,W.ravel().copy(),X_n_rows,W.shape[1],W.shape[0]).argmax(1)]] == y_test39)/float(len(y_test39))
+
 
 
 if args.model_W is None:
@@ -153,16 +196,12 @@ n_classes = 48
 print "n_classes=%d" % n_classes
 
 
-feature_ind, rownnz, rowstartidx = binary_to_bsparse(X)
-feature_ind = feature_ind[:,1].copy()
-y = y.astype(np.int16) 
 dset = BinaryArrayDataset(
                           feature_ind, rownnz, rowstartidx,y)
 print y[12]
-del X
 
 
-accuracy =np.sum(leehon_dict_array[weights_classes[np.dot(X_test,W.T).argmax(1)]] == y_test39)/float(len(y_test39))
+accuracy = test_accuraacy(W)
 print "old accuracy = %g" % accuracy
 if args.do_projection:
     print "do_projection = True"
@@ -187,7 +226,7 @@ for l in args.l:
         np.save('%s_%gl_%dniter_W.npy' % (args.save_prefix,l,iter_id), W_trained2)
         print "W_trained2.shape= %s" % (str(W_trained2.shape))
         start_t = start_t + len(y)/2.
-        accuracy = np.sum(leehon_dict_array[weights_classes[np.dot(X_test,W_trained2.T).argmax(1)]] == y_test39)/float(len(y_test39))
+        accuracy = test_accuracy(W_trained2)
         print l,iter_id, accuracy
         open('%s_%gl_%dniter_accuracy.txt' % (args.save_prefix,l,iter_id),'w').write(str(accuracy ))
         if args.reuse_previous_iterates:
