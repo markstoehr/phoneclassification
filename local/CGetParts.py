@@ -1,6 +1,6 @@
 import numpy as np
 import argparse
-from stride_parts import code_spread_parts
+from phoneclassification.stride_parts import code_spread_parts
 
 def main(args):
     E = np.load(args.data)

@@ -16,6 +16,7 @@ def main(args):
 
 
     classifier_id = 0
+    print "ncomponents = %d" % args.ncomponents
     for phone_id, phone in enumerate(phones):
         if args.v:
             print "Working on phone %s which has id %d" % (phone,phone_id)
@@ -25,7 +26,7 @@ def main(args):
                                    args.data_suffix))
 
 
-        
+
         if phone_id == 0:
             avgs = np.zeros((max_n_classifiers,
                                ) + X.shape[1:])
@@ -38,7 +39,7 @@ def main(args):
             weights = np.zeros(max_n_classifiers,dtype=float)
             meta = np.zeros((max_n_classifiers
                              ,2),dtype=int)
-            
+
         if args.ncomponents == 1:
             avgs[phone_id] = X.mean(0)
             counts[phone_id] = X.shape[0]
@@ -91,10 +92,10 @@ def main(args):
                     classifier_id + n_use_components] = cur_weights
             meta[classifier_id:classifier_id+n_use_components,0] = phone_id
             meta[classifier_id:classifier_id+n_use_components,1] = np.arange(n_use_components)
-            
+
             # make sure we move forward in the vector
             classifier_id += n_use_components
-            
+
 
     print "Total of %d models" % classifier_id
     np.save('%s/avgs_%s' % (args.out_prefix, args.out_suffix),
@@ -106,7 +107,7 @@ def main(args):
 
     np.save('%s/meta_%s' % (args.out_prefix, args.out_suffix),
             meta[:classifier_id])
-     
+
 
 
 if __name__ == "__main__":
