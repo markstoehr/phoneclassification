@@ -67,6 +67,9 @@ cdef void _col_sum(double *A,double *A_col_sums,int X_n_rows, int K) nogil:
     cdef int i,j
     cdef double *cur_A_ptr = <double *>A
     
+    for j in range(K):
+        A_col_sums[j] = 0.0
+
     for i in range(X_n_rows):
         for j in range(K):
             A_col_sums[j] += cur_A_ptr[j]
@@ -113,6 +116,7 @@ cdef void _m_step(int* X_indices, int*rownnz, int * rowstartidx,
         cur_A_ptr = <double *> A
         total_A_sum += A_col_sums[k]
         cur_X_ptr = <int *> X_indices
+
         for i in range(X_n_rows):            
             for j in range(rownnz[i]):
                 idx = cur_X_ptr[j]
@@ -121,6 +125,7 @@ cdef void _m_step(int* X_indices, int*rownnz, int * rowstartidx,
             cur_A_ptr += K
             cur_X_ptr += rownnz[i]
         cur_P_ptr += D
+
 
     cur_P_ptr = <double *> P
     for k in range(K):
@@ -143,14 +148,14 @@ cdef double _e_step(int* X_indices, int*rownnz, int * rowstartidx,
 
     for k in range(K):
         weights[k] = log(weights[k])
-        log_inv_P_sum_ptr[0] = 0.0
+        log_inv_P_sum_ptr[k] = 0.0
         for j in range(D):
             log_inv = log(1.0-P_ptr[0])
-            log_inv_P_sum_ptr[0] += log_inv
+            log_inv_P_sum_ptr[k] += log_inv
             P_ptr[0] = log(P_ptr[0]) - log_inv
             P_ptr += 1
 
-        log_inv_P_sum_ptr += 1
+
 
     log_inv_P_sum_ptr = <double *> log_inv_P_sum
     P_ptr = <double *>P
@@ -232,12 +237,19 @@ def EM(np.ndarray[int,ndim=1,mode='c'] X_indices,
         double old_loglikelihood, loglikelihood
         int n_iter = 0
 
+    _m_step(<int *>X_indices.data, <int *>rownnz.data, <int *>rowstartidx.data,
+            <double *>P.data, <double *>weights.data, <double *>A.data, <double *>A_col_sums.data, X_n_rows, D, K)
+
+
     loglikelihood = _e_step(<int *>X_indices.data, <int *>rownnz.data, 
                             <int *>rowstartidx.data,
                             <double *>P.data, <double *>log_inv_P_sum.data, <double *>weights.data, 
                             <double *>A.data,  X_n_rows, D, K)
-    old_loglikelihood = (1-tol)* loglikelihood -1
-    while (loglikelihood - old_loglikelihood > tol *loglikelihood) and (n_iter < total_iter):
+    old_loglikelihood = (1.0+tol)* loglikelihood -1.0
+    
+
+    
+    while (loglikelihood - old_loglikelihood >  -tol *old_loglikelihood ) and (n_iter < total_iter):
         _m_step(<int *>X_indices.data, <int *>rownnz.data, <int *>rowstartidx.data,
                  <double *>P.data, <double *>weights.data, <double *>A.data, <double *>A_col_sums.data, X_n_rows, D, K)
         old_loglikelihood = loglikelihood
@@ -245,5 +257,9 @@ def EM(np.ndarray[int,ndim=1,mode='c'] X_indices,
                             <double *>P.data, <double *>log_inv_P_sum.data, <double *>weights.data, 
                             <double *>A.data, X_n_rows, D, K)
         n_iter += 1
+        print ("Iteration %d: loglikelihood = %g " % (n_iter,loglikelihood))
 
-    return P, weights, A
+    _m_step(<int *>X_indices.data, <int *>rownnz.data, <int *>rowstartidx.data,
+                 <double *>P.data, <double *>weights.data, <double *>A.data, <double *>A_col_sums.data, X_n_rows, D, K)
+
+    return P, weights, A, loglikelihood
