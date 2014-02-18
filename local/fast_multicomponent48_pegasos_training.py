@@ -2,8 +2,8 @@ from __future__ import division
 from phoneclassification.confusion_matrix import confusion_matrix
 import numpy as np
 import argparse,collections
-from phoneclassification.multicomponent_binary_sgd import BinaryArrayDataset, multiclass_sgd, sparse_dot
-from MulticlassPegasos.binary_sgd import binary_to_bsparse
+from phoneclassification.multicomponent_binary_sgd import BinaryArrayDataset, multiclass_sgd, sparse_dotmm
+from phoneclassification.binary_sgd import binary_to_bsparse, add_final_one
 
 
 """
@@ -135,10 +135,14 @@ else:
     rownnz = np.load('%sX_rownnz_%s' % (args.data_dir,
                                               args.use_sparse_suffix),
                           )
+    dim = np.prod(np.load('%sdim_%s' % (args.data_dir, args.use_sparse_suffix)))
+
     X_n_rows = rownnz.shape[0]
+    
     rowstartidx = np.load('%sX_rowstartidx_%s' % (args.data_dir,
                                               args.use_sparse_suffix),
                           )
+    feature_ind, rownnz,rowstartidx = add_final_one(feature_ind,rownnz,rowstartidx,dim)
     y = np.load('%sy_%s' % (args.data_dir,
                                               args.use_sparse_suffix),
                           ).astype(np.int16)
@@ -152,12 +156,14 @@ else:
     rowstartidx_test = np.load('%sX_rowstartidx_%s' % (args.data_dir,
                                               args.dev_sparse_suffix),
                            )
+    feature_ind_test, rownnz_test,rowstartidx_test = add_final_one(feature_ind_test,rownnz_test,rowstartidx_test,dim)
     
     y_test = np.load('%sy_%s' % (args.data_dir,
                                               args.dev_sparse_suffix),
                           ).astype(np.int16)
+    X_n_rows_test = y_test.shape[0]
     y_test39 = np.array([ leehon_dict[phone_id] for phone_id in y_test]).astype(np.int16)
-    test_accuracy = lambda W : np.sum(leehon_dict_array[weights_classes[sparse_dotmm(feature_ind_test,rownnz_test,rowstartidx_test,W.ravel().copy(),X_n_rows,W.shape[1],W.shape[0]).argmax(1)]] == y_test39)/float(len(y_test39))
+    test_accuracy = lambda W : np.sum(leehon_dict_array[weights_classes[sparse_dotmm(feature_ind_test,rownnz_test,rowstartidx_test,W.ravel().copy(),X_n_rows_test,W.shape[1],W.shape[0]).argmax(1)]] == y_test39)/float(len(y_test39))
 
 
 
@@ -201,7 +207,7 @@ dset = BinaryArrayDataset(
 print y[12]
 
 
-accuracy = test_accuraacy(W)
+accuracy = test_accuracy(W)
 print "old accuracy = %g" % accuracy
 if args.do_projection:
     print "do_projection = True"
