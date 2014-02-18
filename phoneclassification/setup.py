@@ -1,6 +1,6 @@
 import os
 from os.path import join
-from sklearn._build_utils import get_blas_info
+from phoneclassification._build_utils import get_blas_info
 
 def configuration(parent_package='', top_path=None):
     import numpy
