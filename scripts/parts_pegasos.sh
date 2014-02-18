@@ -119,3 +119,55 @@ python $local/estimate_all_models.py --phones $datadir/phone.list\
     --ncomponents ${ncomponents}\
     -v
 done
+
+
+#
+# now do the fast components
+#
+
+python $local/fast_multicomponent48_pegasos_training.py --root_dir /home/mark/Research/phoneclassification \
+	--data_dir $exp/ \
+        --use_sparse_suffix bsparse.npy \
+        --dev_sparse_suffix dev_bsparse.npy \
+	--model_avgs $exp/avgs_2C.npy \
+	--model_meta $exp/meta_2C.npy \
+	--save_prefix $exp/W_fast_pegasos_parts_all_useproj_1tsc_9C \
+	-l .05 \
+        --niter 10 --time_scaling 1.0 \
+        --use_hinge 1 
+
+python $local/fast_multicomponent48_pegasos_training.py --root_dir /home/mark/Research/phoneclassification \
+	--data_dir $exp/ \
+        --use_sparse_suffix bsparse.npy \
+        --dev_sparse_suffix dev_bsparse.npy \
+	--model_W $exp/W_fast_pegasos_parts_all_useproj_1tsc_9C_0.05l_8niter_W.npy \
+	--model_meta $exp/meta_2C.npy \
+	--save_prefix $exp/W_fast_pegasos_parts_all_useproj_1tsc_2C \
+	-l .02 .01 .001 \
+        --niter 5 --time_scaling 1.0 \
+        --use_hinge 1 
+
+python $local/fast_multicomponent48_pegasos_training.py --root_dir /home/mark/Research/phoneclassification \
+	--data_dir $exp/ \
+        --use_sparse_suffix bsparse.npy \
+        --dev_sparse_suffix dev_bsparse.npy \
+	--model_W $exp/W_fast_pegasos_parts_all_useproj_1tsc_9C_0.05l_8niter_W.npy \
+	--model_meta $exp/meta_2C.npy \
+	--save_prefix $exp/W_fast_pegasos_parts_all_useproj_1tsc_2C \
+	-l .07 .09 .1 \
+        --niter 10 --time_scaling 1.0 \
+        --use_hinge 1 
+
+
+python $local/fast_multicomponent48_pegasos_training.py --root_dir /home/mark/Research/phoneclassification \
+	--data_dir $exp/ \
+        --use_sparse_suffix bsparse.npy \
+        --dev_sparse_suffix dev_bsparse.npy \
+	--model_W $exp/W_fast_pegasos_parts_all_useproj_1tsc_2C_0.09l_6niter_W.npy \
+	--model_meta $exp/meta_2C.npy \
+	--save_prefix $exp/W_fast_pegasos_parts_all_useproj_1tsc_2C \
+	-l .12 .14 .16 \
+        --do_projection \
+        --start_t 300000 \
+        --niter 10 --time_scaling 1.0 \
+        --use_hinge 1 
