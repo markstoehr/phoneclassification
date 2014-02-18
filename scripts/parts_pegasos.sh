@@ -171,3 +171,18 @@ python $local/fast_multicomponent48_pegasos_training.py --root_dir /home/mark/Re
         --start_t 300000 \
         --niter 10 --time_scaling 1.0 \
         --use_hinge 1 
+
+
+# using fast_em in order to train the models
+python $local/fast_48phone_EM.py --root_dir /home/mark/Research/phoneclassification \
+       --data_dir $exp/ \
+       --use_sparse_suffix bsparse.npy \
+       --dev_sparse_suffix dev_bsparse.npy \
+       --out_prefix $exp \
+       --out_suffix parts_4C \
+       --total_iter 300 \
+       --total_init 10 \
+       --min_counts 30 \
+       --tol 1e-6 \
+       --ncomponents 4
+       
