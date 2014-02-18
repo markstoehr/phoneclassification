@@ -499,7 +499,7 @@ def multiclass_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
     cdef Py_ssize_t n_samples = dataset.n_samples
 
     print ("n_samples = %d " %n_samples)
-    cdef MultiWeightMatrix W = MultiWeightMatrix(weights,weights_classes, weights_components, n_classes)
+    cdef MultiWeightMatrix W = MultiWeightMatrix(weights,weights_classes, weights_components, n_classes, 1.0, 1.0)
 
     print ("sq_norm = %g" % W.sq_norm)
     
