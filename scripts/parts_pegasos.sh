@@ -185,4 +185,28 @@ python $local/fast_48phone_EM.py --root_dir /home/mark/Research/phoneclassificat
        --min_counts 30 \
        --tol 1e-6 \
        --ncomponents 4
+
+python $local/fast_48phone_EM.py --root_dir /home/mark/Research/phoneclassification \
+       --data_dir $exp/ \
+       --use_sparse_suffix bsparse.npy \
+       --dev_sparse_suffix dev_bsparse.npy \
+       --out_prefix $exp \
+       --out_suffix parts_8C \
+       --total_iter 300 \
+       --total_init 10 \
+       --min_counts 30 \
+       --tol 1e-6 \
+       --ncomponents 8
+
+python $local/fast_48phone_EM.py --root_dir /home/mark/Research/phoneclassification \
+       --data_dir $exp/ \
+       --use_sparse_suffix bsparse.npy \
+       --dev_sparse_suffix dev_bsparse.npy \
+       --out_prefix $exp \
+       --out_suffix parts_16C \
+       --total_iter 300 \
+       --total_init 10 \
+       --min_counts 30 \
+       --tol 1e-6 \
+       --ncomponents 16
        
