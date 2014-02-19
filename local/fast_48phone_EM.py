@@ -222,7 +222,7 @@ for phn_id, phn in enumerate(leehon[:,0]):
             n_good = good_components.sum()
             P = P[good_components]
             weights = weights[good_components]
-            A = np.zeros((phn_n_data,cur_ncomponents),dtype=float)
+            A = np.zeros((phn_n_data,n_good),dtype=float)
             A = A.reshape(A.size)
             P = P.reshape(P.size)
 
