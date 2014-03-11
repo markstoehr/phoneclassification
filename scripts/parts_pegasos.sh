@@ -224,3 +224,59 @@ python $local/fast_48phone_EM.py --root_dir /home/mark/Research/phoneclassificat
        --tol 1e-6 \
        --ncomponents 16
        
+
+python $local/fast_multicomponent48_pegasos_training.py --root_dir /home/mark/Research/phoneclassification \
+	--data_dir $exp/ \
+        --use_sparse_suffix bsparse.npy \
+        --dev_sparse_suffix dev_bsparse.npy \
+	--model_avgs $exp/avgs_parts_4C.npy \
+	--model_meta $exp/meta_parts_4C.npy \
+	--save_prefix $exp/W_fast_pegasos_parts_all_useproj_1tsc_4C \
+	-l .05 \
+        --niter 12 --time_scaling 1.0 \
+        --use_hinge 1 
+
+python $local/fast_multicomponent48_pegasos_training.py --root_dir /home/mark/Research/phoneclassification \
+	--data_dir $exp/ \
+        --use_sparse_suffix bsparse.npy \
+        --dev_sparse_suffix dev_bsparse.npy \
+	--model_W $exp/W_fast_pegasos_parts_all_useproj_1tsc_4C_0.05l_11niter_W.npy \
+	--model_meta $exp/meta_parts_4C.npy \
+	--save_prefix $exp/W_fast_pegasos_parts_all_useproj_1tsc_4C \
+	-l .07 .09 \
+        --niter 7 --time_scaling 1.0 \
+        --use_hinge 1 --start_t 400000
+
+python $local/fast_multicomponent48_pegasos_training.py --root_dir /home/mark/Research/phoneclassification \
+	--data_dir $exp/ \
+        --use_sparse_suffix bsparse.npy \
+        --dev_sparse_suffix dev_bsparse.npy \
+	--model_W $exp/W_fast_pegasos_parts_all_useproj_1tsc_4C_0.05l_11niter_W.npy \
+	--model_meta $exp/meta_parts_4C.npy \
+	--save_prefix $exp/W_fast_pegasos_parts_all_useproj_1tsc_4C \
+	-l .07 .09 \
+        --niter 7 --time_scaling 1.0 \
+        --use_hinge 1 --start_t 400000
+
+
+python $local/fast_multicomponent48_pegasos_training.py --root_dir /home/mark/Research/phoneclassification \
+	--data_dir $exp/ \
+        --use_sparse_suffix bsparse.npy \
+        --dev_sparse_suffix dev_bsparse.npy \
+	--model_avgs $exp/avgs_parts_8C.npy \
+	--model_meta $exp/meta_parts_8C.npy \
+	--save_prefix $exp/W_fast_pegasos_parts_all_useproj_1tsc_8C \
+	-l .05 \
+        --niter 12 --time_scaling 1.0 \
+        --use_hinge 1 
+
+python $local/fast_multicomponent48_pegasos_training.py --root_dir /home/mark/Research/phoneclassification \
+	--data_dir $exp/ \
+        --use_sparse_suffix bsparse.npy \
+        --dev_sparse_suffix dev_bsparse.npy \
+	--model_W $exp/W_fast_pegasos_parts_all_useproj_1tsc_8C_0.05l_11niter_W.npy \
+	--model_meta $exp/meta_parts_8C.npy \
+	--save_prefix $exp/W_fast_pegasos_parts_all_useproj_1tsc_8C \
+	-l .07 .09 \
+        --niter 7 --time_scaling 1.0 \
+        --use_hinge 1 --start_t 500000

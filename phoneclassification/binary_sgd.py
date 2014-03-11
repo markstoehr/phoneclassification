@@ -41,3 +41,26 @@ def add_final_one(feature_ind, rownnz, rowstartidx,dim):
         new_feature_ind[new_rowstartidx[i+1]-1] = D
 
     return new_feature_ind, new_rownnz, new_rowstartidx
+
+def add_final_one_soft(feature_ids, feature_vals, rownnz, dim,x_base):
+    """
+    Need to be able to add a final 1 to the end of each feature vector
+    to account for the constant term
+    """
+    D = np.prod(dim)
+    new_feature_ids = np.zeros(len(feature_ids) + len(rownnz),dtype=np.intc)
+    new_feature_vals = np.zeros(len(feature_vals) + len(rownnz),dtype=np.uint8)
+    new_rownnz = rownnz + 1
+    rowstartidx = np.zeros(len(rownnz)+1)
+    rowstartidx[1:] = np.cumsum(rownnz)
+    new_rowstartidx = np.arange(len(rowstartidx),dtype=np.intc) + rowstartidx
+    for i, rowidx in enumerate(rowstartidx[:-1]):
+        new_feature_ids[new_rowstartidx[i]:
+                        new_rowstartidx[i+1]-1] =feature_ids[rowidx:rowstartidx[i+1]]
+        new_feature_vals[new_rowstartidx[i]:
+                        new_rowstartidx[i+1]-1] =feature_vals[rowidx:rowstartidx[i+1]]
+        assert new_rowstartidx[i+1] - new_rowstartidx[i] == new_rownnz[i]
+        new_feature_ids[new_rowstartidx[i+1]-1] = D
+        new_feature_vals[new_rowstartidx[i+1]-1] = np.uint8(x_base)
+
+    return new_feature_ids,new_feature_vals, new_rownnz
