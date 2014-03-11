@@ -126,6 +126,88 @@ cdef class BinaryArrayDataset(object):
         np.random.RandomState(seed).shuffle(self.index)
 
 
+cdef class FixedPointArrayDataset(object):
+    """A binary dataset backed by a two-dimensional binary numpy array
+
+    The dtype of the numpy array is expected to be ``np.uint8``
+    and C-style memory layout. Based on the sequential dataset
+    in sklearn
+    """
+    
+    cdef int n_samples, current_index
+    cdef short int *Y_data_ptr
+    cdef int * X_indices_ptr
+    cdef np.uint8_t * X_vals_ptr
+    cdef double X_val_base
+    cdef int * rowstartidx_ptr
+    cdef int * rownnz_ptr
+    cdef int * index_data_ptr
+    cdef np.ndarray index
+    
+    
+    def __cinit__(self, np.ndarray[int, ndim=1, mode='c'] X_indices,
+                  np.ndarray[np.uint8_t,ndim=1,mode='c'] X_vals,
+                  double X_val_base,
+                   np.ndarray[int, ndim=1, mode='c'] rownnz,
+                   np.ndarray[int, ndim=1, mode='c'] rowstartidx,
+                  np.ndarray[SHORT_t,ndim=1, mode='c'] Y):
+        """A ``SequentialDataset`` backed by a two-dimensional numpy array.
+
+        Parameters
+        ----------
+        X : ndarray, dtype=np.uint8, ndim=2, mode='c'
+            The samples; a two-dimensional c-contiguous numpy array of dtype np.uint8
+
+        Y : ndarray, dtype=np.int16, ndim=1, mode='c'
+            The target classes; a one-dimensional c-contiguous numpy array of dtype double.
+
+        sample_weights : ndarray, dtype=double, ndim=1, mode='c'
+            Weight for each sample; a one-dimensional c-continuous numpy array of dtype double
+        """
+        
+            
+
+        self.n_samples = rownnz.shape[0]
+
+        self.current_index = -1
+        self.X_val_base = X_val_base
+        self.Y_data_ptr = <short int *>Y.data
+        self.X_indices_ptr = <int *>X_indices.data
+        self.X_vals_ptr = <np.uint8_t *>X_vals.data
+        self.rowstartidx_ptr = <int *>rowstartidx.data
+        self.rownnz_ptr = <int *>rownnz.data
+        cdef np.ndarray[int, ndim=1,
+                        mode='c'] index = np.arange(0,
+                                                    self.n_samples,
+                                                    dtype=np.intc)
+        self.index = index
+        self.index_data_ptr = <int *> index.data
+        
+
+    cdef void next(self, 
+                   int **x_ind_ptr, np.uint8_t **x_val_ptr,
+                   int *nnz, short int *y) nogil:
+            
+        cdef int current_index = self.current_index
+        if current_index >= (self.n_samples-1):
+                current_index = -1
+
+        current_index += 1
+        cdef int sample_idx =self.index_data_ptr[current_index]
+        cdef int offset = self.rowstartidx_ptr[sample_idx]
+
+        y[0] = self.Y_data_ptr[sample_idx]
+
+        x_ind_ptr[0] = self.X_indices_ptr + offset
+        x_val_ptr[0] = self.X_vals_ptr + offset
+        nnz[0] = self.rownnz_ptr[sample_idx]
+            
+        self.current_index = current_index
+
+    cdef void shuffle(self, seed):
+        np.random.RandomState(seed).shuffle(self.index)
+
+
 cdef class MultiWeightMatrix(object):
     """Dense matrix represented by a 1d numpy array, a 2d numpy array,
     a scalar,
@@ -357,6 +439,51 @@ cdef class MultiWeightMatrix(object):
         val = (xsqnorm * c * c) + (2.0 * innerprod * Wscale * c)
         self.sq_norm += val
 
+    
+    cdef void fixed_point_add(self, int w_row,
+                         int *x_ind_ptr, np.uint8_t *x_val_ptr, double x_val_base, int xnnz, double c) nogil:
+        """Scales fixed point vector sample x by constant c and adds it 
+        to the weight vector.
+
+        This operation updates ``sq_norm`` and ``row_sq_norms``
+        Parameters
+        ----------
+        w_row : int
+            The row of w we are using for classification
+        x_data_ptr : double*
+            The array which holds the feature values of ``x``.
+        x_ind_ptr : np.intc*
+            The array which holds the feature indices of ``x``
+        xnnz : int
+            The number of non-zero features of ``x``.
+        c : double
+            The scaling constant for the example
+        """
+        cdef int j
+        cdef int idx
+        cdef int offset
+        cdef double val
+        cdef double innerprod = 0.0
+        cdef double xsqnorm = 0.0
+        
+        cdef double Wscale = self.Wscale
+        cdef double c_div_Wscale = (c / Wscale)
+        cdef double* W_data_ptr 
+
+
+
+        
+        W_data_ptr =  (self.W_data_ptr + w_row * self.n_features)
+        for j in range(xnnz):
+            idx = x_ind_ptr[j]
+            val = (<double> x_val_ptr[j])/x_val_base
+            innerprod += (W_data_ptr[idx] * val)
+            xsqnorm += val * val
+            W_data_ptr[idx] += val * c_div_Wscale
+
+
+        self.sq_norm += (xsqnorm * c * c) + (2.0 * innerprod * Wscale * c)
+
     cdef void dot(self, int *x_ind_ptr,
                     int xnnz) nogil:
         """Computes the matrix-vector dot product between a sample x and the weight matrix. And stores the result in the weight vector.
@@ -383,6 +510,38 @@ cdef class MultiWeightMatrix(object):
             for j in range(xnnz):
                 idx = x_ind_ptr[j]
                 scores_data_ptr[i] += cur_data_ptr[idx]
+
+            scores_data_ptr[i] *= self.Wscale
+
+    cdef void fixed_point_dot(self, int *x_ind_ptr, np.uint8_t *x_val_ptr, double x_val_base,
+                    int xnnz) nogil:
+        """Computes the matrix-vector dot product between a sample x and the weight matrix. And stores the result in the weight vector.
+        fixed_point 
+
+        Parameters
+        ----------
+        x_ind_ptr : double*
+            The array which holds the feature indices of ``x``
+        xnnz : int
+            The number of non-zero features of ``x`` (length of x_ind_ptr)
+
+
+        """
+        cdef int i,j
+        cdef int idx
+        cdef double innerprod = 0.0
+        cdef double* scores_data_ptr = self.scores_data_ptr
+        cdef double* W_data_ptr = self.W_data_ptr
+        cdef double * cur_data_ptr
+
+        for i in range(self.n_components):
+            cur_data_ptr = W_data_ptr + i*self.n_features
+            scores_data_ptr[i] = 0.0
+            for j in range(xnnz):
+                idx = x_ind_ptr[j]
+                scores_data_ptr[i] += cur_data_ptr[idx] * (<double> x_val_ptr[j])
+                
+            scores_data_ptr[i] *= self.Wscale/ x_val_base
 
     cdef void find_best_scores(self, int y) nogil:
         """Assumes scores have been computed with self.dot
@@ -505,6 +664,7 @@ def multiclass_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
     
     cdef Py_ssize_t n_components = W.n_components
     cdef int *x_ind_ptr = NULL
+    cdef np.uint8_t *x_val_ptr = NULL
     cdef short int y = 0
     cdef int xnnz, best_true_row, best_off_row, do_update
     cdef double best_true_score, best_off_score, scaling
@@ -633,6 +793,178 @@ def multiclass_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
 
 
                 W.binary_add(best_off_row,x_ind_ptr,xnnz,eta)
+                if verbose > 1:
+                    for j in range(W.n_features):
+                        print ("W[%d,%d] = %g" % (best_off_row,j,
+                                              (W.W_data_ptr + best_off_row * W.n_features)[j]*W.Wscale))
+
+
+            if do_projection > 0:
+                scaling = oneoversqrtlambda/sqrt(W.sq_norm)
+                if scaling < 1.0:
+                    W.scale(scaling)
+
+
+    cdef np.ndarray[ndim=2,dtype=double] out_weights = np.zeros((W.n_components,W.n_features),dtype=np.float)
+    cdef double * cur_data_ptr = W.W_data_ptr
+    for i in range(W.n_components):
+        cur_data_ptr = <double *>(W.W_data_ptr + i*W.n_features)
+        for j in range(W.n_features):
+            out_weights[i,j] = cur_data_ptr[j] * W.Wscale
+
+
+    return out_weights
+            
+
+def multiclass_sgd_fixed_point(np.ndarray[double, ndim=1, mode='c'] weights,
+                   np.ndarray[int, ndim=1, mode='c'] weights_classes,
+                   np.ndarray[int, ndim=1, mode='c'] weights_components,
+                   int n_classes,
+                               FixedPointArrayDataset dataset, int seed, int n_iter,
+                   int shuffle,
+                   int verbose,
+                   double start_t,
+                   double lambda_param,
+                   int do_projection, double time_scaling, int use_hinge):
+    cdef Py_ssize_t n_samples = dataset.n_samples
+
+    print ("n_samples = %d " %n_samples)
+    cdef MultiWeightMatrix W = MultiWeightMatrix(weights,weights_classes, weights_components, n_classes, 1.0, 1.0)
+
+    print ("sq_norm = %g" % W.sq_norm)
+    
+    cdef Py_ssize_t n_components = W.n_components
+    cdef int *x_ind_ptr = NULL
+    cdef np.uint8_t *x_val_ptr = NULL
+    cdef short int y = 0
+    cdef double x_val_base = dataset.X_val_base
+    cdef int xnnz, best_true_row, best_off_row, do_update
+    cdef double best_true_score, best_off_score, scaling
+    cdef double eta, t, oneoversqrtlambda
+    
+    oneoversqrtlambda = 1./sqrt(lambda_param)
+
+    t = start_t + 1.0
+    print ("t=%g" % t)
+
+    cdef unsigned int epoch
+    cdef Py_ssize_t i, j
+
+    for i in range(W.n_classes):
+        print ("Class %d in the weight matrix starts on row %d and has %d components" % (i,W.class_row_idx_ptr[i],W.class_n_components_ptr[i]))
+
+    for epoch in range(n_iter):
+        if verbose > 0:
+            print ("-- Epoch %d" % epoch)
+        if shuffle > 0:
+            dataset.shuffle(seed)
+        for i in range(n_samples):
+            if verbose > 1:
+                print ("\n\n-----Working on sample %d------" % i)
+            if i % 5000 == 0:
+                print i
+            dataset.next( & x_ind_ptr, & x_val_ptr, & xnnz, & y)
+
+            W.fixed_point_dot( x_ind_ptr, x_val_ptr, x_val_base, xnnz)
+            if verbose > 1:
+                print ("y = %d" % y)
+                for j in range(xnnz):
+                    print ("x[%d] = 1" % x_ind_ptr[j])
+
+            if y == 0:
+                best_true_row = 0
+                best_off_row = W.class_row_idx_ptr[1]
+                
+            else:
+                best_off_row = 0
+                best_true_row = W.class_row_idx_ptr[y]
+
+            if verbose > 1:
+                print ("Initial best_true_row= %d\t best_off_row=%d" % (best_true_row,best_off_row))
+                
+            # initialize the estimated best scores for updates
+            best_true_score = W.scores_data_ptr[best_true_row]
+            best_off_score = W.scores_data_ptr[best_off_row]
+            
+            # find the best row for both
+            for j in range(W.n_components):
+
+                
+                if W.W_classes_ptr[j] == y:
+                    if verbose > 1:
+                        print ("Within class Comparing within class on row %d with score %g " % (j,W.scores_data_ptr[j]))
+                    # within class 
+                    if W.scores_data_ptr[j] > best_true_score:
+                        
+                        if verbose > 1:
+                            print ("row %d score %g is bigger than previous max %g " % (j,W.scores_data_ptr[j], best_true_score))
+                        best_true_row = j
+                        best_true_score = W.scores_data_ptr[j]
+                        if verbose > 1:
+                            print ("best_true_row=%d  best_true_score=%g" % (best_true_row,best_true_score))
+                else:
+                    if verbose > 1:
+                        print ("Comparing outside class on row %d with score %g " % (j,W.scores_data_ptr[j]))
+                    # not within class
+                    if W.scores_data_ptr[j] > best_off_score:
+                        if verbose > 1:
+                            print ("Outside class: row %d score %g is bigger than previous max %g " % (j,W.scores_data_ptr[j], best_off_score))
+                            
+                        best_off_row = j
+                        best_off_score = W.scores_data_ptr[j]
+                        if verbose > 1:
+                            print ("best_off_row=%d  best_off_score=%g" % (best_off_row,best_off_score))
+
+                            
+                            
+            if use_hinge > 0:
+                if best_off_score - best_true_score > -1:
+                    do_update = 1
+                else:
+                    do_update = 0
+            else:
+                if (best_off_score - best_true_score > -1) and (
+                        best_off_score -best_true_score < 1):
+                    do_update = 1
+                else:
+                    do_update = 0
+
+
+            scaling = 1./(t+(<double>i)/time_scaling)
+            W.scale( (1.0- scaling))
+            if verbose > 1:
+                print ("1-scaling=%g\t W.scaling=%g" % (1.0-scaling,W.Wscale))
+
+            if do_update > 0:
+            
+                if verbose > 1:
+                    print ("Loss exceeded -1-- doing update -W.scaling=%g" % W.Wscale)
+                eta = scaling/lambda_param
+                if verbose > 1:
+                    print ("eta=%g" % eta)
+                if verbose > 1:
+                    for j in range(W.n_features):
+                        print ("W[%d,%d] = %g" % (best_true_row,j,
+                                              (W.W_data_ptr + best_true_row * W.n_features)[j]*W.Wscale))
+
+
+                W.fixed_point_add(best_true_row,x_ind_ptr, x_val_ptr, x_val_base, xnnz,eta)
+                if verbose > 1:
+                    for j in range(W.n_features):
+                        print ("W[%d,%d] = %g" % (best_true_row,j,
+                                              (W.W_data_ptr + best_true_row * W.n_features)[j]*W.Wscale))
+
+                    print " "
+                               
+                eta *= -1.0
+                if verbose > 1:
+                    for j in range(W.n_features):
+                        print ("W[%d,%d] = %g" % (best_off_row,j,
+                                              (W.W_data_ptr + best_off_row * W.n_features)[j]*W.Wscale))
+
+
+
+                W.fixed_point_add(best_true_row,x_ind_ptr, x_val_ptr, x_val_base, xnnz,eta)
                 if verbose > 1:
                     for j in range(W.n_features):
                         print ("W[%d,%d] = %g" % (best_off_row,j,
