@@ -11,8 +11,10 @@ mkdir -p $conf
 plots=$exp/plots
 mkdir -p $plots
 
+dev_examples=""
 train_examples=""
 train_examples_S=""
+test_examples=""
 save_parts=""
 spec_save_parts=""
 viz_spec_parts=""
@@ -20,6 +22,7 @@ phns=`cat $datadir/phone.list`
 
 for phn in `cat $datadir/phone.list` ; do
   dev_examples="$dev_examples data/local/data/${phn}_dev_examples.npy"
+  test_examples="$test_examples data/local/data/${phn}_core_test_examples.npy"
   train_examples="$train_examples data/local/data/${phn}_train_examples.npy"
   train_examples_S="$train_examples_S data/local/data/${phn}_train_examples_S.npy"
   save_parts="$save_parts $exp/${phn}_train_parts.npy"
@@ -42,6 +45,7 @@ python $local/CExtractPatches.py --config $conf/main.config \
 
 # code the utterance with the parts
 dev_examples=""
+test_examples=""
 templates=""
 for phn in `cat ${datadir}/phone.list` ; do
    echo phn=${phn}
@@ -53,10 +57,14 @@ for phn in `cat ${datadir}/phone.list` ; do
       --parts $exp/patches_50_2r_20000max.npy\
       --out ${exp}/${phn}_dev_examples_parts.npy
 
+   python local/CGetParts.py --data $datadir/${phn}_core_test_examples.npy\
+      --parts $exp/patches_50_2r_20000max.npy\
+      --out ${exp}/${phn}_core_test_examples_parts.npy
+
 
 
    dev_examples="$dev_examples ${exp}/${phn}_dev_examples_parts.npy"
-
+   test_examples="$test_examples ${exp}/${phn}_core_test_examples_parts.npy"
 done
 
 python $local/Construct_sparse_dataset.py --leehon $conf/phones.48-39\
@@ -70,6 +78,12 @@ python $local/Construct_sparse_dataset.py --leehon $conf/phones.48-39\
     --data_suffix dev_examples_parts.npy \
     --out_prefix $exp/ \
     --out_suffix dev_bsparse.npy
+
+python $local/Construct_sparse_dataset.py --leehon $conf/phones.48-39\
+    --data $exp/ \
+    --data_suffix core_test_examples_parts.npy \
+    --out_prefix $exp/ \
+    --out_suffix core_test_bsparse.npy
 
 
 # multiclass warm-start
