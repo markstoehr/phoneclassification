@@ -1026,7 +1026,7 @@ def multiclass_sgd_fixed_point(np.ndarray[double, ndim=1, mode='c'] weights,
 
 
 
-                W.fixed_point_add(best_true_row,x_ind_ptr, x_val_ptr, x_val_base, xnnz,eta)
+                W.fixed_point_add(best_off_row,x_ind_ptr, x_val_ptr, x_val_base, xnnz,eta)
                 if verbose > 1:
                     for j in range(W.n_features):
                         print ("W[%d,%d] = %g" % (best_off_row,j,
