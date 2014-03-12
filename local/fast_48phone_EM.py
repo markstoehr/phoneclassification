@@ -43,6 +43,8 @@ parser.add_argument('--use_sparse_suffix',default=None,
                     type=str,help='If not included then we do not assume a sparse save structure for the data otherwise this is the suffix for where the data are stored in sparse format')
 parser.add_argument('--dev_sparse_suffix',default=None,
                     type=str,help='If not included then we do not assume a sparse save structure for the data otherwise this is the suffix for where the data are stored in sparse format')
+parser.add_argument('--in_prefix',type=str,help='prefix for path the data were saved to')
+parser.add_argument('--in_suffix',type=str,help='suffix for path the data were saved to')
 
 parser.add_argument('--out_prefix',type=str,help='prefix for path to save the output to')
 parser.add_argument('--out_suffix',type=str,help='suffix for path to save the output to')
@@ -51,6 +53,7 @@ parser.add_argument('--total_init',type=np.intc,help='Number of initializations 
 parser.add_argument('--min_counts',type=np.intc,help='Minimum number of examples for each component')
 parser.add_argument('--tol',type=float,help='Convergence criterion')
 parser.add_argument('--ncomponents',type=np.intc,help='Maximum number of components per model')
+parser.add_argument('--simple_data_load',action='store_true',help='whether to use simple data loading')
 # parser.add_argument('--',type=,help='')
 args = parser.parse_args()
 
@@ -80,7 +83,41 @@ for phn in leehon[:,0]:
 use_phns39 = list(phones39[:])
 use_phns48 = leehon[:,0]
 
-if args.use_sparse_suffix is None:
+if args.simple_data_load:
+    all_feature_ids_train = np.load('%s/all_feature_ids_train_%s'
+                                % (args.in_prefix,args.in_suffix))
+    
+    example_nnz_train = np.load('%s/example_nnz_train_%s'
+                                % (args.in_prefix,args.in_suffix))
+
+    rowstartidx_train = np.zeros(len(example_nnz_train)+1,dtype=np.intc)
+    rowstartidx_train[1:] = np.cumsum(example_nnz_train)
+    y_train = np.load('%s/y_train_%s'
+                      % (args.in_prefix,args.in_suffix))
+
+    feature_dim = np.load('%s/example_dim_train_%s' % (args.in_prefix,args.in_suffix))
+    dim = np.intc(np.prod(feature_dim))
+    
+    n_train_data = example_nnz_train.shape[0]
+
+    all_feature_ids_dev = np.load('%s/all_feature_ids_dev_%s'
+                                % (args.in_prefix,args.in_suffix))
+
+    example_nnz_dev = np.load('%s/example_nnz_dev_%s'
+                                % (args.in_prefix,args.in_suffix))
+    rowstartidx_dev = np.zeros(len(example_nnz_dev)+1,dtype=np.intc)
+    rowstartidx_dev[1:] = np.cumsum(example_nnz_dev)
+    y_dev = np.load('%s/y_dev_%s'
+                    % (args.in_prefix,args.in_suffix))
+    n_dev_data = example_nnz_dev.shape[0]
+
+    all_feature_ids_dev, example_nnz_dev,rowstartidx_dev = add_final_one(all_feature_ids_dev, example_nnz_dev,rowstartidx_dev,dim)
+    y_dev39 = np.array([ leehon_dict[phone_id] for phone_id in y_dev]).astype(np.int16)
+    dev_accuracy = lambda W : np.sum(leehon_dict_array[weights_classes[sparse_dotmm(all_feature_ids_dev,example_nnz_dev,rowstartidx_dev,W.ravel().copy(),n_dev_data,W.shape[1],W.shape[0]).argmax(1)]] == y_dev39)/float(len(y_dev39))
+
+
+
+elif args.use_sparse_suffix is None:
     nobs = np.zeros(len(use_phns48))
     for phone_id, phone in enumerate(use_phns48):    
         X = np.load('%s/%s_train_examples.npy' % (datadir,phone))
@@ -122,6 +159,7 @@ if args.use_sparse_suffix is None:
     y = y.astype(np.int16) 
     del X
     test_accuracy = lambda W : np.sum(leehon_dict_array[weights_classes[np.dot(X_test,W.T).argmax(1)]] == y_test39)/float(len(y_test39))
+    
 
 else:
     feature_ind = np.load('%sX_indices_%s' % (args.data_dir,
@@ -167,15 +205,15 @@ for phn_id, phn in enumerate(leehon[:,0]):
     print "Working on phone %s which has id %d" % (phn, phn_id)
     print "classifier_id = %d" % classifier_id
     
-    phn_n_data = (y == phn_id).sum()
-    phn_rownnz = rownnz[y==phn_id].copy()
-    phn_start_idx = np.where(y==phn_id)[0].min()
-    phn_end_idx = np.where(y==phn_id)[0].max()+1
+    phn_n_data = (y_train == phn_id).sum()
+    phn_rownnz = example_nnz_train[y_train==phn_id].copy()
+    phn_start_idx = np.where(y_train==phn_id)[0].min()
+    phn_end_idx = np.where(y_train==phn_id)[0].max()+1
     if (phn_end_idx - phn_start_idx) != len(phn_rownnz):
         import pdb; pdb.set_trace()
         
-    phn_rowstartidx = rowstartidx[phn_start_idx:phn_end_idx+1].copy()
-    phn_feature_ind = feature_ind[phn_rowstartidx[0]:phn_rowstartidx[-1]].copy()
+    phn_rowstartidx = rowstartidx_train[phn_start_idx:phn_end_idx+1].copy()
+    phn_feature_ind = all_feature_ids_train[phn_rowstartidx[0]:phn_rowstartidx[-1]].copy()
     phn_rowstartidx -= phn_rowstartidx[0]
     
     converged = False
@@ -307,5 +345,5 @@ n_classes = 48
 print "n_classes=%d" % n_classes
 
 
-accuracy = test_accuracy(W)
+accuracy = dev_accuracy(W)
 print "test accuracy = %g" % accuracy
