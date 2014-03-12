@@ -64,3 +64,18 @@ def add_final_one_soft(feature_ids, feature_vals, rownnz, dim,x_base):
         new_feature_vals[new_rowstartidx[i+1]-1] = np.uint8(x_base)
 
     return new_feature_ids,new_feature_vals, new_rownnz
+
+def convert_soft_to_hard(feature_ids,feature_vals,x_base,rownnz):
+    min_val = int(x_base/2)
+    use_ids = feature_vals >= min_val
+    new_length = use_ids.sum()
+    new_rownnz= np.ascontiguousarray(np.zeros(len(rownnz),dtype=np.intc))
+    cur_idx = 0
+    for i,nnz in enumerate(rownnz):
+        new_rownnz[i] = (feature_vals[cur_idx: cur_idx + nnz] >= min_val).sum()
+        cur_idx += nnz
+        
+    new_feature_ids = np.ascontiguousarray(feature_ids[use_ids]).astype(np.intc)
+    new_feature_vals = np.ascontiguousarray(feature_vals[use_ids]).astype(np.intc)
+    return new_feature_ids, new_feature_vals, new_rownnz
+        
