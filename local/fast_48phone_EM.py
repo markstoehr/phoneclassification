@@ -2,8 +2,8 @@ from __future__ import division
 from phoneclassification.confusion_matrix import confusion_matrix
 import numpy as np
 import argparse,collections
-from phoneclassification._fast_EM import EM, e_step, m_step
-from phoneclassification.multicomponent_binary_sgd import sparse_dotmm
+
+from phoneclassification._fast_EM import EM, e_step, m_step, sparse_dotmm
 from phoneclassification.binary_sgd import binary_to_bsparse, add_final_one
 
 
