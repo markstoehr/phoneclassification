@@ -2,7 +2,7 @@ from __future__ import division
 import numpy as np
 import filterbank as fb
 from scipy.ndimage.filters import maximum_filter, convolve
-from nitime.algorithms.spectral import dpss_windows
+
 
 def preemphasis(x,preemph=.95):
     return np.append( (x[1:] - .95*x[:-1])[::-1],x[0])[::-1]
