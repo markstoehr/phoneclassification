@@ -467,7 +467,7 @@ cdef class MultiWeightMatrix(object):
         cdef double xsqnorm = 0.0
         
         cdef double Wscale = self.Wscale
-        cdef double c_div_Wscale = (c / Wscale)
+        cdef double c_div_Wscale = (c / Wscale) / x_val_base
         cdef double* W_data_ptr 
 
 
@@ -476,11 +476,14 @@ cdef class MultiWeightMatrix(object):
         W_data_ptr =  (self.W_data_ptr + w_row * self.n_features)
         for j in range(xnnz):
             idx = x_ind_ptr[j]
-            val = (<double> x_val_ptr[j])/x_val_base
+            val = (<double> x_val_ptr[j])
             innerprod += (W_data_ptr[idx] * val)
             xsqnorm += val * val
             W_data_ptr[idx] += val * c_div_Wscale
 
+        # normalize by x_val_base
+        innerprod /= x_val_base
+        xsqnorm /= (x_val_base * x_val_base)
 
         self.sq_norm += (xsqnorm * c * c) + (2.0 * innerprod * Wscale * c)
 
@@ -541,7 +544,10 @@ cdef class MultiWeightMatrix(object):
                 idx = x_ind_ptr[j]
                 scores_data_ptr[i] += cur_data_ptr[idx] * (<double> x_val_ptr[j])
                 
-            scores_data_ptr[i] *= self.Wscale/ x_val_base
+            # if this were proper would also scale by the scaling
+            # factor
+            scores_data_ptr[i] *= self.Wscale
+            scores_data_ptr[i] /= x_val_base
 
     cdef void find_best_scores(self, int y) nogil:
         """Assumes scores have been computed with self.dot
@@ -643,7 +649,59 @@ cdef class MultiWeightMatrix(object):
         """The L2 norm of the weight vector.
         """
         return sqrt(self.sq_norm)
-            
+
+
+def test_fixed_point_dot_multiclass_weights(np.ndarray[double, ndim=1, mode='c'] weights,
+                   np.ndarray[int, ndim=1, mode='c'] weights_classes,
+                   np.ndarray[int, ndim=1, mode='c'] weights_components,
+                                            int n_classes, 
+                                            np.ndarray[int,
+                                                       ndim=1,
+                                                       mode='c'] x,
+np.ndarray[np.uint8_t,
+                                                       ndim=1,
+                                                       mode='c'] x_val,
+                                            double x_val_base, int xnnz):
+    cdef MultiWeightMatrix W = MultiWeightMatrix(weights,weights_classes, weights_components, n_classes, 1.0, 1.0)
+    W.fixed_point_dot( <int *>x.data, <np.uint8_t *>x_val.data,x_val_base,
+                    xnnz)
+
+    cdef np.ndarray[ndim=1,dtype=double] scores = np.zeros(W.n_components,dtype=np.float)
+    cdef double * cur_data_ptr = W.scores_data_ptr
+    for i in range(W.n_components):
+        scores[i] = cur_data_ptr[i]
+
+
+    return scores
+
+def test_fixed_point_add_multiclass_weights(np.ndarray[double, ndim=1, mode='c'] weights,
+                   np.ndarray[int, ndim=1, mode='c'] weights_classes,
+                   np.ndarray[int, ndim=1, mode='c'] weights_components,
+                                            int n_classes, 
+                                            np.ndarray[int,
+                                                       ndim=1,
+                                                       mode='c'] x,
+np.ndarray[np.uint8_t,
+                                                       ndim=1,
+                                                       mode='c'] x_val,
+                                            double x_val_base, int xnnz,
+                                            int add_row,
+                                            double eta):
+    cdef MultiWeightMatrix W = MultiWeightMatrix(weights,weights_classes, weights_components, n_classes, 1.0, 1.0)
+    cdef int i,j
+    W.fixed_point_add(add_row,  <int *>x.data, <np.uint8_t *>x_val.data,x_val_base,
+                    xnnz,eta)
+    W.reset_Wscale()
+    cdef np.ndarray[ndim=2,dtype=double] out_weights = np.zeros((W.n_components,W.n_features),dtype=np.float)
+    cdef double * cur_data_ptr = W.W_data_ptr
+    for i in range(W.n_components):
+        cur_data_ptr = <double *>(W.W_data_ptr + i*W.n_features)
+        for j in range(W.n_features):
+            out_weights[i,j] = cur_data_ptr[j] * W.Wscale
+
+
+    return out_weights
+
 
 def multiclass_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
                    np.ndarray[int, ndim=1, mode='c'] weights_classes,
@@ -692,9 +750,13 @@ def multiclass_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
             if i % 5000 == 0:
                 print i
             dataset.next( & x_ind_ptr, & xnnz, & y)
-
+            
+            if verbose > 1:
+                print "handling dot"
             W.dot( x_ind_ptr, xnnz)
             if verbose > 1:
+                print "finished dot"
+            if verbose > 2:
                 print ("y = %d" % y)
                 for j in range(xnnz):
                     print ("x[%d] = 1" % x_ind_ptr[j])
@@ -719,28 +781,28 @@ def multiclass_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
 
                 
                 if W.W_classes_ptr[j] == y:
-                    if verbose > 1:
+                    if verbose > 2:
                         print ("Within class Comparing within class on row %d with score %g " % (j,W.scores_data_ptr[j]))
                     # within class 
                     if W.scores_data_ptr[j] > best_true_score:
                         
-                        if verbose > 1:
+                        if verbose > 2:
                             print ("row %d score %g is bigger than previous max %g " % (j,W.scores_data_ptr[j], best_true_score))
                         best_true_row = j
                         best_true_score = W.scores_data_ptr[j]
-                        if verbose > 1:
+                        if verbose > 2:
                             print ("best_true_row=%d  best_true_score=%g" % (best_true_row,best_true_score))
                 else:
-                    if verbose > 1:
+                    if verbose > 2:
                         print ("Comparing outside class on row %d with score %g " % (j,W.scores_data_ptr[j]))
                     # not within class
                     if W.scores_data_ptr[j] > best_off_score:
-                        if verbose > 1:
+                        if verbose > 2:
                             print ("Outside class: row %d score %g is bigger than previous max %g " % (j,W.scores_data_ptr[j], best_off_score))
                             
                         best_off_row = j
                         best_off_score = W.scores_data_ptr[j]
-                        if verbose > 1:
+                        if verbose > 2:
                             print ("best_off_row=%d  best_off_score=%g" % (best_off_row,best_off_score))
 
                             
@@ -770,14 +832,14 @@ def multiclass_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
                 eta = scaling/lambda_param
                 if verbose > 1:
                     print ("eta=%g" % eta)
-                if verbose > 1:
+                if verbose > 2:
                     for j in range(W.n_features):
                         print ("W[%d,%d] = %g" % (best_true_row,j,
                                               (W.W_data_ptr + best_true_row * W.n_features)[j]*W.Wscale))
 
 
                 W.binary_add(best_true_row,x_ind_ptr,xnnz,eta)
-                if verbose > 1:
+                if verbose > 2:
                     for j in range(W.n_features):
                         print ("W[%d,%d] = %g" % (best_true_row,j,
                                               (W.W_data_ptr + best_true_row * W.n_features)[j]*W.Wscale))
@@ -785,7 +847,7 @@ def multiclass_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
                     print " "
                                
                 eta *= -1.0
-                if verbose > 1:
+                if verbose > 2:
                     for j in range(W.n_features):
                         print ("W[%d,%d] = %g" % (best_off_row,j,
                                               (W.W_data_ptr + best_off_row * W.n_features)[j]*W.Wscale))
@@ -793,7 +855,7 @@ def multiclass_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
 
 
                 W.binary_add(best_off_row,x_ind_ptr,xnnz,eta)
-                if verbose > 1:
+                if verbose > 2:
                     for j in range(W.n_features):
                         print ("W[%d,%d] = %g" % (best_off_row,j,
                                               (W.W_data_ptr + best_off_row * W.n_features)[j]*W.Wscale))
@@ -964,7 +1026,7 @@ def multiclass_sgd_fixed_point(np.ndarray[double, ndim=1, mode='c'] weights,
 
 
 
-                W.fixed_point_add(best_true_row,x_ind_ptr, x_val_ptr, x_val_base, xnnz,eta)
+                W.fixed_point_add(best_off_row,x_ind_ptr, x_val_ptr, x_val_base, xnnz,eta)
                 if verbose > 1:
                     for j in range(W.n_features):
                         print ("W[%d,%d] = %g" % (best_off_row,j,
