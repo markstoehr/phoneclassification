@@ -40,7 +40,8 @@ python $local/CExtractPatches.py --config $conf/main.config \
    --spec_save_parts $exp/patches_50_2r_100000max_spec.npy \
    --viz_spec_parts $exp/patches_50_2r_100000max_viz.png \
    --n_components 50 \
-   --patch_radius 2  -v
+   --patch_radius 2  -v \
+   --do_exp_weighted_divergence 
 
 
 # code the utterance with the parts
