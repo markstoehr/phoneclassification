@@ -54,6 +54,8 @@ def main(args):
         X_shape = X.shape[1:]
 
         S = np.load(fl_spec)
+        if args.do_exp_weighted_divergence:
+            S *= np.exp(S)
 
 
         X_patches = []
@@ -185,7 +187,8 @@ if __name__=="__main__":
                         default=2,
                         type=int,
                         help='radius for the patch')
-
+    parser.add_argument('--do_exp_weighted_divergence',
+                        action='store_true',help='whether to do the exponentially-weighted differences -i.e. a KL divergence on the spectrogram for edges')
     # parser.add_argument('--lengths',
     #                     type=str,
     #                     nargs='+',
