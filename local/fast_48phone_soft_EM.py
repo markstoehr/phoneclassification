@@ -36,13 +36,27 @@ def get_reduced_meta(W_meta,leehon_dict):
 parser = argparse.ArgumentParser("""File to run a basic test of the pegasos multiclass
 SVM solver over the scattering features""")
 parser.add_argument('--root_dir',default='/home/mark/Research/phoneclassification',type=str,help='root directory for where to look for things')
-parser.add_argument('--data_dir',default='data/local/data',type=str,
-                    help='relative path to where the data is kept')
 
-parser.add_argument('--in_suffix',
-                    type=str,help='suffix for reading in the data files')
-parser.add_argument('--in_prefix',default=None,
-                    type=str,help='prefix for reading in the data files')
+
+parser.add_argument('--X_indices',
+                    type=str,help='path to the feature ids')
+parser.add_argument('--X_values',
+                    type=str,help='path to the feature values')
+parser.add_argument('--X_rownnz',
+                    type=str,help='path to the feature non-zero counts')
+parser.add_argument('--X_indices_dev',
+                    type=str,help='path to the feature ids')
+parser.add_argument('--X_values_dev',
+                    type=str,help='path to the feature values')
+parser.add_argument('--X_rownnz_dev',
+                    type=str,help='path to the feature non-zero counts')
+parser.add_argument('--y_train',
+                    type=str,help='path to the training labels')
+parser.add_argument('--y_dev',
+                    type=str,help='path to the development labels')
+
+parser.add_argument('--dim',default=None,
+                    type=str,help='path to the dimension file')
 parser.add_argument('--x_base',type=float,help='base for the x values')
 parser.add_argument('--out_prefix',type=str,help='prefix for path to save the output to')
 parser.add_argument('--out_suffix',type=str,help='suffix for path to save the output to')
@@ -57,7 +71,7 @@ args = parser.parse_args()
 
 rootdir = args.root_dir[:]
 confdir='%s/conf'%rootdir
-datadir='%s/%s' % (rootdir,args.data_dir)
+
 
 
 leehon=np.loadtxt('%s/phones.48-39' % confdir,dtype=str)
@@ -81,33 +95,26 @@ for phn in leehon[:,0]:
 use_phns39 = list(phones39[:])
 use_phns48 = leehon[:,0]
 
-all_feature_ids_train = np.load('%s/all_feature_ids_train_%s'
-                                % (args.in_prefix,args.in_suffix))
-all_feature_values_train = np.load('%s/all_feature_values_train_%s'
-                                % (args.in_prefix,args.in_suffix))
-example_nnz_train = np.load('%s/example_nnz_train_%s'
-                                % (args.in_prefix,args.in_suffix))
+all_feature_ids_train = np.load(args.X_indices).astype(np.intc)
+all_feature_values_train = np.load(args.X_values).astype(np.uint8)
+example_nnz_train = np.load(args.X_rownnz).astype(np.intc)
 
 rowstartidx_train = np.zeros(len(example_nnz_train)+1,dtype=np.intc)
 rowstartidx_train[1:] = np.cumsum(example_nnz_train)
-y_train = np.load('%s/y_train_%s'
-                                % (args.in_prefix,args.in_suffix))
+y_train = np.load(args.y_train)
 
-feature_dim = np.load('%s/example_dim_train_%s' % (args.in_prefix,args.in_suffix))
+feature_dim = np.load(args.dim)
 dim = np.intc(np.prod(feature_dim))
 x_base = args.x_base
 n_train_data = example_nnz_train.shape[0]
 
-all_feature_ids_dev = np.load('%s/all_feature_ids_dev_%s'
-                                % (args.in_prefix,args.in_suffix))
-all_feature_values_dev = np.load('%s/all_feature_values_dev_%s'
-                                % (args.in_prefix,args.in_suffix))
-example_nnz_dev = np.load('%s/example_nnz_dev_%s'
-                                % (args.in_prefix,args.in_suffix))
+all_feature_ids_dev = np.load(args.X_indices_dev).astype(np.intc)
+all_feature_values_dev = np.load(args.X_values_dev).astype(np.uint8)
+example_nnz_dev = np.load(args.X_rownnz_dev).astype(np.intc)
+
 rowstartidx_dev = np.zeros(len(example_nnz_dev)+1,dtype=np.intc)
 rowstartidx_dev[1:] = np.cumsum(example_nnz_dev)
-y_dev = np.load('%s/y_dev_%s'
-                                % (args.in_prefix,args.in_suffix))
+y_dev = np.load(args.y_dev)
 n_dev_data = example_nnz_dev.shape[0]
 
 all_feature_ids_dev, all_feature_values_dev, example_nnz_dev = add_final_one_soft(all_feature_ids_dev,
@@ -122,13 +129,12 @@ dev_accuracy = lambda W : np.sum(leehon_dict_array[weights_classes[sparse_soft_d
                                                                                      example_nnz_dev,
                                                                                      W.ravel().copy(),x_base,W.shape[1],W.shape[0]).argmax(1)]] == y_dev39)/float(len(y_dev39))
 
-
 max_n_classifiers = args.ncomponents * 48
 classifier_id = 0
 for phn_id, phn in enumerate(leehon[:,0]):
+
     print "Working on phone %s which has id %d" % (phn, phn_id)
     print "classifier_id = %d" % classifier_id
-    
     phn_n_data = (y_train == phn_id).sum()
     phn_rownnz = np.ascontiguousarray(example_nnz_train[y_train==phn_id]).copy()
     phn_start_idx = np.where(y_train==phn_id)[0].min()
@@ -191,6 +197,7 @@ for phn_id, phn in enumerate(leehon[:,0]):
             P = P.reshape(P.size)
 
 
+            print "recomputing likelihood while getting new responsibilities"
             likelihood = soft_e_step(phn_feature_ids, 
                                      phn_feature_values,
                    phn_rownnz, 
@@ -198,9 +205,12 @@ for phn_id, phn in enumerate(leehon[:,0]):
                    weights, 
                    A, x_base, phn_n_data, dim, n_good )
 
+            print "rerunning EM"
+
             P,weights, A, loglikelihood = soft_bernoulli_EM(phn_feature_ids, phn_feature_values, x_base, phn_rownnz, 
-           phn_n_data,dim,cur_ncomponents,tol, total_iter,
+           phn_n_data,dim,n_good,tol, total_iter,
                           A)
+            print "finished salvaging EM"
             A = A.reshape(phn_n_data,n_good)
             P = P.reshape(n_good, dim)
             component_counts = A.sum(0)
@@ -239,8 +249,8 @@ np.save('%s/meta_%s' % (args.out_prefix, args.out_suffix),
 
 
 # now we test the model to see what happens
-avgs = avgs.reshape(avgs.shape[0],
-                    dim)
+avgs = np.clip(avgs.reshape(avgs.shape[0],
+                    dim),.001,1-.001)
 W = np.zeros((len(avgs),dim+1))
 W[:,:-1] = np.log(avgs) - np.log(1-avgs)
 W[:,-1] = np.log(1-avgs).sum(-1)
