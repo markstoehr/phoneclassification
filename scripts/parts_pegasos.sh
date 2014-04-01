@@ -283,3 +283,59 @@ python $local/fast_multicomponent48_pegasos_training.py --root_dir /home/mark/Re
 	-l .07 .09 \
         --niter 7 --time_scaling 1.0 \
         --use_hinge 1 --start_t 500000
+
+
+python $local/plot_matrix_rank.py --in_matrix $exp/W_fast_pegasos_parts_all_useproj_1tsc_4C_0.09l_6niter_W.npy --out_plot $exp/W_fast_pegasos_parts_all_useproj_1tsc_4C_0.09l_6niter_sv_plot.png
+
+
+python $local/test_multicomponent_accuracy.py --root_dir /home/mark/Research/phoneclassification \
+	--data_dir $exp/ \
+        --use_sparse_suffix bsparse.npy \
+        --test_sparse_suffix core_test_bsparse.npy \
+	--model_W $exp/W_fast_pegasos_parts_all_useproj_1tsc_4C_0.09l_6niter_W.npy \
+	--model_meta $exp/meta_parts_4C.npy \
+	--save_prefix $exp/W_fast_pegasos_parts_4C \
+
+
+
+python $local/test_multicomponent_accuracy.py --root_dir /home/mark/Research/phoneclassification \
+	--data_dir $exp/ \
+        --use_sparse_suffix bsparse.npy \
+        --test_sparse_suffix core_test_bsparse.npy \
+	--model_W $exp/W_fast_pegasos_parts_all_useproj_1tsc_4C_0.07l_6niter_W.npy \
+	--model_meta $exp/meta_parts_4C.npy \
+	--save_prefix $exp/W_fast_pegasos_parts_4C_0.07l \
+
+
+python $local/fast_multicomponent48_pegasos_training.py --root_dir /home/mark/Research/phoneclassification \
+	--data_dir $exp/ \
+        --use_sparse_suffix bsparse.npy \
+        --dev_sparse_suffix dev_bsparse.npy \
+	--model_W $exp/W_fast_pegasos_parts_all_useproj_1tsc_4C_0.07l_6niter_W.npy \
+	--model_meta $exp/meta_parts_4C.npy \
+	--save_prefix $exp/W_pegasos_parts_train_dev_4C \
+    --combine_train_dev \
+	-l .07  \
+        --niter 10 --time_scaling 1.0 \
+        --use_hinge 1 --start_t 400000
+
+
+python $local/test_multicomponent_accuracy.py --root_dir /home/mark/Research/phoneclassification \
+	--data_dir $exp/ \
+        --use_sparse_suffix bsparse.npy \
+        --test_sparse_suffix core_test_bsparse.npy \
+	--model_W $exp/W_pegasos_parts_train_dev_4C_0.07l_9niter_W.npy \
+	--model_meta $exp/meta_parts_4C.npy \
+	--save_prefix $exp/W_fast_pegasos_parts_4C_0.07l_train_dev_class_core_test_result \
+
+
+# getting the confusion matrix for clustering
+
+python $local/test_multicomponent_accuracy.py --root_dir /home/mark/Research/phoneclassification \
+	--data_dir $exp/ \
+        --use_sparse_suffix bsparse.npy \
+        --test_sparse_suffix dev_bsparse.npy \
+	--model_W $exp/W_fast_pegasos_parts_all_useproj_1tsc_4C_0.07l_6niter_W.npy \
+	--model_meta $exp/meta_parts_4C.npy \
+	--save_prefix $exp/W_fast_pegasos_parts_4C_0.07l_train_on_dev \
+
