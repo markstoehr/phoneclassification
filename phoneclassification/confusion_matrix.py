@@ -24,3 +24,5 @@ def confusion_matrix(guesses,labels):
 def normalize_confusion_rows(C):
     return C / C.sum(1)[:,np.newaxis]
     
+def segment_confusion_matrix(cmat):
+    pass
