@@ -2,6 +2,7 @@ from __future__ import division
 import numpy as np
 import filterbank as fb
 from scipy.ndimage.filters import maximum_filter, convolve
+from scipy.signal import convolve as scipy_convolve
 
 
 def preemphasis(x,preemph=.95):
@@ -83,6 +84,33 @@ def spectrogram(x,sample_rate,freq_cutoff,winsize,nfft,oversampling,
 
     return abs_avg[:,:cutoff_idx]
 
+def smooth_log_spectrogram(S2,kernel_length,
+                           num_window_samples,do_freq_smoothing=False):
+    S = S2.copy()
+    S[S== 0] = S[S!=0].min()
+    S = np.log(S)
+    # S = S[::-1,:]
+    # smooth the spectrogram
+    x = np.arange(0, kernel_length, 1, np.float64)
+    x0 = kernel_length // 2.
+    sigma = 1
+    g=1/(sigma * np.sqrt(2*np.pi)) *np.exp(-((x-x0)**2  / 2* sigma**2))
+    smoothing_kernel = g/g.sum()
+    # feature smoothing should leave only meaningful features
+    if do_freq_smoothing:
+        S_smoothed = scipy_convolve(S,smoothing_kernel.reshape(1,kernel_length),mode ='valid')
+    else:
+        S_smoothed = S
+        # preserve time length of spectrogram, smooth over time
+
+    S_smoothed= scipy_convolve(S_smoothed,smoothing_kernel.reshape(kernel_length,1),mode='same')
+    if num_window_samples > 256:
+        S_subsampled = S_smoothed[:,::2]
+
+    else:
+        S_subsampled = S_smoothed
+        
+    return S_subsampled
 
 
 def zero_pad_window(w,n_pad):
