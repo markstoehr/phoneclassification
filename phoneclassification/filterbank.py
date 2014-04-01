@@ -408,6 +408,11 @@ def hermite_window(taper_length,
     Compute the hermite tapers up to second derivatives of the hermite
     window
     """
+    if taper_length % 2 == 0:
+        taper_length -= 1
+        taper_is_even = True
+    else:
+        taper_is_even = False
     dt = (2.*half_time_support)/(taper_length-1)
     tt = np.linspace(-half_time_support,
                      half_time_support,
@@ -439,6 +444,12 @@ def hermite_window(taper_length,
         DH = pad_multitaper_filters(DH)
         DDH = pad_multitaper_filters(DDH)
         tt = pad_multitaper_filters(tt)
+        
+    if taper_is_even:
+        HNew = np.zeros((order,
+                         HTemp.shape[1]+1),dtype=float)
+        HNew[:,:-1] = HTemp[:order]
+        return HNew, DH, DDH, tt
 
     return HTemp[:order], DH,DDH,tt
 
