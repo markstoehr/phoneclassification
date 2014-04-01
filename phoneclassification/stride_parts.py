@@ -86,6 +86,51 @@ def code_spread_parts(X,flat_part_log_odds,constants,part_shape,spread_neighborh
                                                                      part_likelihoods.shape, max_likes.strides + (0,))).astype(np.uint8)
     
     return maximum_filter(part_codes,size=spread_neighborhood+(1,),cval=0,mode='constant')
-                                         
-                                          
-                                         
+
+
+def code_spread_parts_inner_constraint(X,flat_part_log_odds,constants,part_shape,spread_neighborhood,inner_radius=1):
+    """
+    Parameters:
+    ============
+    X:
+       Data matrix
+
+    flat_part_log_odds:
+       Two dimensional matrix containing the flattened log odds for the parts
+
+    contants:
+       constants for computing the log-likelihood (log partition function for the part models)
+
+    part_shape:
+       tuple giving the original shape for the parts
+
+    spread_neighborhood:
+       neighborhood to spread over
+
+    count_threshold:
+       minimum counts for edges in a patch for it to be used
+    
+    
+    """
+    patch_arr_view = extract_patches(X,part_shape)
+    patch_max = patch_arr_view.sum(-1)[:,:,(part_shape[0]-1)/2-inner_radius:(part_shape[0]-1)/2+inner_radius+1,(part_shape[1]-1)/2-inner_radius:(part_shape[1]-1)/2+inner_radius+1].reshape(patch_arr_view.shape[0],
+                                                                                                                                            patch_arr_view.shape[1],
+                                                                                                                                                                                                       (inner_radius*2 +1)**2).min(-1)
+    nparts = len(constants)
+    try:
+        part_likelihoods = np.lib.stride_tricks.as_strided(
+        np.dot(get_patch_matrix(patch_arr_view),
+               flat_part_log_odds) + constants,
+            patch_arr_view.shape[:2] + (nparts,),
+        (patch_arr_view.shape[1] * constants.strides[0]*nparts,
+         constants.strides[0]*nparts,
+         constants.strides[0]))
+    except:
+        import pdb; pdb.set_trace()
+    max_likes = part_likelihoods.max(-1)
+    max_likes[patch_max < 1 ] = 1
+    part_codes = (part_likelihoods >= np.lib.stride_tricks.as_strided(max_likes,
+                                                                     part_likelihoods.shape, max_likes.strides + (0,))).astype(np.uint8)
+    
+    return maximum_filter(part_codes,size=spread_neighborhood+(1,),cval=0,mode='constant')
+
