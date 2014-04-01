@@ -320,8 +320,8 @@ python $local/fast_train_multicomponent_pegasos.py --root_dir /home/mark/Researc
   --model_avgs $exp/avgs_6C.npy \
   --model_meta $exp/meta_6C.npy \
   --save_prefix $exp/multicomponent_pegasos_6C \
-  -l .05 .01 .1 .5 .005 .0001 \
-  --niter 3
+  -l .05 \
+  --niter 8
 
 python $local/further_updates_train_multicomponent_pegasos.py --root_dir /home/mark/Research/phoneclassification \
   --data_dir data/local/data \
@@ -374,4 +374,10 @@ python $local/simple_train_multicomponent_pegasos.py --root_dir /home/mark/Resea
   --eta .1 \
   -T 100000 100000 100000 100000 100000 100000 100000 100000 100000
 
+# test the model
 
+python $local/full_test_pegasos_svm_simple.py --root_dir /home/mark/Research/phoneclassification \
+  --data_dir data/local/data \
+  --W $exp/multicomponent_pegasos_6C_0.05l_1500000T_W.npy \
+  --W_meta $exp/meta_6C.npy \
+  --out_results_prefix $exp/multicomponent_pegasos_6C_0.06l_1500000T
