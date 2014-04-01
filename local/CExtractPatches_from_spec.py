@@ -1,7 +1,7 @@
 from __future__ import division
 import numpy as np
 import argparse, itertools
-from sklearn import svm
+from scipy.io import wavfile
 from template_speech_rec import configParserWrapper
 from TestSVMBernoulli import get_bernoulli_templates
 from scipy.ndimage.filters import maximum_filter
@@ -11,10 +11,11 @@ from matplotlib.colors import colorConverter
 from mpl_toolkits.axes_grid1 import ImageGrid
 import matplotlib.cm as cm
 import spectral_features.filters.filterbank as fb
-from phoneclassification.transforms import spectrogram, preemphasis, process_wav
+from phoneclassification.transforms import spectrogram, preemphasis, process_wav, smooth_log_spectrogram
+from template_speech_rec.get_train_data import get_edge_features_use_config
+import template_speech_rec.edge_signal_proc as esp
 
-
-def get_maximal_patches(X,S,patch_radius=2):
+def get_maximal_patches(X,S,patch_radius=2,min_count=50):
     """
     """
     k = 2*patch_radius+1
@@ -23,12 +24,13 @@ def get_maximal_patches(X,S,patch_radius=2):
     edge_arr_view= np.lib.stride_tricks.as_strided(X,edge_view_shape,X.strides[:-1] + X.strides )
     edge_arr_sums = edge_arr_view.sum(-1).sum(-1).sum(-1)
     edge_local_maxes = maximum_filter(edge_arr_sums,size=(k,k),cval=0,mode='constant')
-    local_max_patches = edge_arr_view[edge_arr_sums >= edge_local_maxes]
+    local_max_patches = edge_arr_view[(edge_arr_sums >= edge_local_maxes) * (edge_arr_sums >= 50)]
 
     spec_sub_shape = (k,k)
 
     spec_view_shape=tuple(np.subtract(S.shape,spec_sub_shape)+1)+spec_sub_shape
     spec_arr_view=np.lib.stride_tricks.as_strided(S,spec_view_shape,S.strides *2 )
+
 
     return local_max_patches, spec_arr_view[edge_arr_sums >= edge_local_maxes]
 
@@ -47,47 +49,66 @@ def main(args):
     total = 0
     num_less_than_eq = np.zeros(20)
 
-    fls = np.loadtxt(args.fls_txt)
+    fls = np.loadtxt(args.fls_txt, dtype=str)
+    
     
     all_X_patches = []
     all_S_patches = []
     
     htemp, dhtemp, ddhtemp, tttemp = fb.hermite_window(
-                config_d['BPF']['winsize']-1,
-                        config_d['BPF']['order'],
-                                config_d['BPF']['half_time_support'])
-    for phn_id, (fl_edge, fl_spec) in enumerate():
-        if len(all_X_patches) > 100000: break
-        print phn_id
+                args.winsize,
+                        args.num_tapers,
+                                args.win_half_time_support)
+    
 
-        X = np.load(fl_edge)
-        X_shape = X.shape[1:]
 
-        S = np.load(fl_spec)
+    run_transform = lambda x, winlength : esp.get_spectrogram_features(x,
+                                     16000,
+                                     winlength,
+                                     80,
+                                                                     2**(int(np.ceil(np.log2(winlength)))),
+                                     4000,
+                                     7,
+                                                                       
+                                 )
+
+
+    X_patches = []
+    S_patches = []
+
+    for fl_id, fl_path in enumerate(fls):
+        if len(X_patches) > 100000: break
+        S = run_transform(wavfile.read(fl_path)[1],                          args.winsize)
+        # spectrogram(,
+        #             16000,
+        #             3200,
+        #             args.winsize,
+        #             2**int(np.ceil(np.log2(args.winsize))),
+        #                 2,
+        #             htemp)
+        
+        
         if args.do_exp_weighted_divergence:
-            S *= np.exp(S)
+            Sold = S.copy()
+            S *=np.exp(S)
+            
+            
+        X = get_edge_features_use_config(S.T,config_d['EDGES'])
 
-
-        X_patches = []
-        S_patches = []
-        for i in xrange(len(X)):
-            if len(X_patches) > 1000: break
-            p_edge,p_spec = get_maximal_patches(X[i],S[i],patch_radius=args.patch_radius)
-            X_patches.extend(p_edge)
-            S_patches.extend(p_spec)
+        cur_X_patches, cur_S_patches = get_maximal_patches(X,S,patch_radius=2)
+        
+        X_patches.extend(cur_X_patches)
+        S_patches.extend(cur_S_patches)
 
         num_new_patches = len(X_patches)
-        print phn_id, num_new_patches
-        all_X_patches.extend(X_patches)
-        all_S_patches.extend(S_patches)
 
 
-    X = np.array(all_X_patches)
-    S = np.array(all_S_patches)
+    X = np.array(X_patches)
+    S = np.array(S_patches)
     data_shape = X.shape[1:]
     X = X.reshape(X.shape[0],np.prod(data_shape))
     bmm = bernoullimm.BernoulliMM(n_components=args.n_components,
-                                  n_init= 20,
+                                  n_init= 50,
                                   n_iter= 500,
                                   random_state=0,
                                   verbose=args.v, tol=1e-6)
@@ -101,6 +122,8 @@ def main(args):
     except:
         import pdb; pdb.set_trace()
     S_shape = S.shape[1:]
+
+    import pdb; pdb.set_trace()
     S_clusters = bmm.cluster_underlying_data(S.reshape(len(S),np.prod(S_shape)),X).reshape(
             *( (bmm.n_components,) + S_shape))[use_means]
     np.save(args.spec_save_parts,S_clusters)
@@ -193,6 +216,23 @@ if __name__=="__main__":
                         type=int,
                         default=50,
                         help='number of components')
+    parser.add_argument('--num_tapers',
+                        type=int,
+                        default=5,
+                        help='number of tapers for signal processing')
+    parser.add_argument('--winsize',
+                        type=int,
+                        default=256,
+                        help='window length for processing')
+    parser.add_argument('--win_half_time_support',
+                        type=int,
+                        default=4,
+                        help='half time support for tapers')
+    parser.add_argument('--fls_txt',
+                        type=str,
+                        
+                        help='where the wav files are saved to as a list for processing')
+    
     parser.add_argument('--patch_radius',
                         default=2,
                         type=int,
