@@ -1,10 +1,10 @@
 from __future__ import division
 from phoneclassification.confusion_matrix import confusion_matrix
 import numpy as np
-import argparse,collections
+import argparse,collections, itertools
 from phoneclassification.multicomponent_binary_sgd import BinaryArrayDataset, multiclass_sgd, sparse_dotmm
 from phoneclassification.binary_sgd import binary_to_bsparse, add_final_one
-
+from phoneclassification.confusion_matrix import confusion_matrix
 
 """
 Extract the set of data associated with a set of phones
@@ -59,6 +59,9 @@ parser.add_argument('--do_projection',action='store_true',help='whether to do th
 parser.add_argument('--reuse_previous_iterates',action='store_true',help='whether to build off of a warm-start from previous iterations')
 parser.add_argument('--start_t',type=float,default=1.0,help='start time initializer')
 parser.add_argument('--simple_data_load',action='store_true',help='whether to use simple data loading')
+parser.add_argument('--self_pace_K_factor',type=float,help='self_learning scaling factor to decrease K')
+parser.add_argument('--combine_train_dev',action='store_true',help='')
+parser.add_argument('--cluster_id_map',type=str,default=None,help='phone map for further reducing the number of phones')
 # parser.add_argument('--',type=,help='')
 args = parser.parse_args()
 
@@ -118,7 +121,7 @@ if args.simple_data_load:
 
     all_feature_ids_dev, example_nnz_dev,rowstartidx_dev = add_final_one(all_feature_ids_dev, example_nnz_dev,rowstartidx_dev,dim)
     y_dev39 = np.array([ leehon_dict[phone_id] for phone_id in y_dev]).astype(np.int16)
-    dev_accuracy = lambda W : np.sum(leehon_dict_array[weights_classes[sparse_dotmm(all_feature_ids_dev,example_nnz_dev,rowstartidx_dev,W.ravel().copy(),n_dev_data,W.shape[1],W.shape[0]).argmax(1)]] == y_dev39)/float(len(y_dev39))
+    dev_accuracy = lambda W : (lambda y_guess: (np.sum(y_guess == y_dev39)/float(len(y_dev39)), y_guess))(leehon_dict_array[weights_classes[sparse_dotmm(all_feature_ids_dev,example_nnz_dev,rowstartidx_dev,W.ravel().copy(),n_dev_data,W.shape[1],W.shape[0]).argmax(1)]])
 
 
 elif args.use_sparse_suffix is None:
@@ -162,7 +165,7 @@ elif args.use_sparse_suffix is None:
     all_feature_ids_train = all_feature_ids_train[:,1].copy()
     y_train = y_train.astype(np.int16) 
     
-    dev_accuracy = lambda W : np.sum(leehon_dict_array[weights_classes[np.dot(X_dev,W.T).argmax(1)]] == y_dev39)/float(len(y_dev39))
+    dev_accuracy, guesses = lambda W : np.sum(leehon_dict_array[weights_classes[np.dot(X_dev,W.T).argmax(1)]] == y_dev39)/float(len(y_dev39))
 
 else:
     all_feature_ids_train = np.load('%sX_indices_%s' % (args.data_dir,
@@ -174,7 +177,7 @@ else:
     dim = np.prod(np.load('%sdim_%s' % (args.data_dir, args.use_sparse_suffix)))
 
     X_n_rows = example_nnz_train.shape[0]
-    
+    n_data_train = X_n_rows
     rowstartidx_train = np.load('%sX_rowstartidx_%s' % (args.data_dir,
                                               args.use_sparse_suffix),
                           )
@@ -198,7 +201,10 @@ else:
                                               args.dev_sparse_suffix),
                           ).astype(np.int16)
     X_n_rows_dev = y_dev.shape[0]
+    n_data_dev = X_n_rows_dev
     y_dev39 = np.array([ leehon_dict[phone_id] for phone_id in y_dev]).astype(np.int16)
+    get_dev_scores = lambda W : sparse_dotmm(all_feature_ids_dev,example_nnz_dev,rowstartidx_dev,W.ravel().copy(),X_n_rows_dev,W.shape[1],W.shape[0])
+    get_scores_accuracy = lambda scores : np.sum(leehon_dict_array[weights_classes[scores.argmax(1)]] == y_dev39)/float(len(y_dev39))
     dev_accuracy = lambda W : np.sum(leehon_dict_array[weights_classes[sparse_dotmm(all_feature_ids_dev,example_nnz_dev,rowstartidx_dev,W.ravel().copy(),X_n_rows_dev,W.shape[1],W.shape[0]).argmax(1)]] == y_dev39)/float(len(y_dev39))
 
 
@@ -222,28 +228,50 @@ W_meta39 = get_reduced_meta(W_meta,leehon_dict).astype(np.intc)
 
 
 
-weights = W.ravel().copy()
-weights_classes = W_meta[:,0].copy()
-weights_components = W_meta[:,1].copy()
-sorted_component_ids = np.argsort(weights_components,kind='mergesort')
-sorted_components = weights_components[sorted_component_ids]
-sorted_weights_classes = weights_classes[sorted_component_ids]
-stable_sorted_weights_classes_ids = np.argsort(sorted_weights_classes,kind='mergesort')
-weights_classes = sorted_weights_classes[stable_sorted_weights_classes_ids]
-weights_components = sorted_components[stable_sorted_weights_classes_ids]
+weights = np.ascontiguousarray(W.ravel())
+weights_classes = np.ascontiguousarray(W_meta[:,0])
+weights_components = np.ascontiguousarray(W_meta[:,1])
+weights_classes39 = np.ascontiguousarray(W_meta39[:,0])
+# sorted_component_ids = np.argsort(weights_components,kind='mergesort')
+# sorted_components = weights_components[sorted_component_ids]
+# sorted_weights_classes = weights_classes[sorted_component_ids]
+# stable_sorted_weights_classes_ids = np.argsort(sorted_weights_classes,kind='mergesort')
+# weights_classes = sorted_weights_classes[stable_sorted_weights_classes_ids]
+# weights_components = sorted_components[stable_sorted_weights_classes_ids]
 
-W = W[sorted_component_ids][stable_sorted_weights_classes_ids]
+# W = W[sorted_component_ids][stable_sorted_weights_classes_ids]
 
 n_classes = 48
 print "n_classes=%d" % n_classes
 
+if args.combine_train_dev:
+    new_all_feature_ids_train = np.zeros(len(all_feature_ids_train) + len(all_feature_ids_dev),dtype=np.intc)
+    new_all_feature_ids_train[:all_feature_ids_train.shape[0]] = all_feature_ids_train
+    new_all_feature_ids_train[all_feature_ids_train.shape[0]:] = all_feature_ids_dev
+    all_feature_ids_train = new_all_feature_ids_train
+    new_example_nnz_train = np.zeros(n_data_train + n_data_dev,dtype=np.intc)
+    new_example_nnz_train[:n_data_train] = example_nnz_train
+    new_example_nnz_train[n_data_train:] = example_nnz_dev
+    example_nnz_train = new_example_nnz_train
+    rowstartidx_train = np.zeros(1+len(example_nnz_train),dtype=np.intc)
+    rowstartidx_train[1:] =np.cumsum(example_nnz_train)
+    new_y_train = np.zeros(n_data_train + n_data_dev, dtype=np.int16)
+    new_y_train[:n_data_train] = y_train
+    new_y_train[n_data_train:] = y_dev
+    y_train = new_y_train
 
 dset = BinaryArrayDataset(
                           all_feature_ids_train, example_nnz_train, rowstartidx_train,y_train)
 print y_train[12]
 
 
-accuracy = dev_accuracy(W)
+dev_scores = get_dev_scores(W)
+accuracy = get_scores_accuracy(dev_scores)
+hinge_losses = np.array(tuple( 1+ s[weights_classes39 != ylabel].max() - s[weights_classes39 == ylabel].max() for s,ylabel in itertools.izip(dev_scores,y_dev39)))
+mid_hinge_value = np.sort(hinge_losses)[int(len(hinge_losses)/2)]
+self_pace_K = 1./mid_hinge_value
+print self_pace_K
+# accuracy, cmat = dev_accuracy(W)
 print "old accuracy = %g" % accuracy
 if args.do_projection:
     print "do_projection = True"
@@ -263,12 +291,13 @@ for l in args.l:
                                weights_classes,
                                weights_components, np.intc(n_classes),
                                 dset, np.intc(0), 1, np.intc(1),np.intc(1),start_t,
-                                l,np.intc(args.do_projection),args.time_scaling,np.intc(args.use_hinge))
+                                    l,np.intc(args.do_projection),args.time_scaling,np.intc(args.use_hinge),self_pace_K)
 
         np.save('%s_%gl_%dniter_W.npy' % (args.save_prefix,l,iter_id), W_trained2)
         print "W_trained2.shape= %s" % (str(W_trained2.shape))
         start_t = start_t + len(y_train)/2.
-        accuracy = dev_accuracy(W_trained2)
+        dev_scores = get_dev_scores(W_trained2)
+        accuracy = get_scores_accuracy(dev_scores)
         print l,iter_id, accuracy
         open('%s_%gl_%dniter_accuracy.txt' % (args.save_prefix,l,iter_id),'w').write(str(accuracy ))
         if args.reuse_previous_iterates:
