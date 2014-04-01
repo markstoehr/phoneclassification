@@ -24,6 +24,12 @@ def configuration(parent_package='', top_path=None):
                          libraries=cblas_libs,
                          **blas_info)
 
+    config.add_extension('multicomponent_lowrank_svm',
+                         sources=['multicomponent_lowrank_svm.c'],
+                         include_dirs=cblas_includes,
+                         libraries=cblas_libs,
+                         **blas_info)
+
     config.add_extension('svm',
                          sources=['svm.c'],
                          include_dirs=cblas_includes,
